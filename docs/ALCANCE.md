@@ -1,0 +1,48 @@
+# Alcance del prototipo v0.1
+
+El objetivo es probar los flujos principales de la propuesta y recoger feedback. No todas las ampliaciones de la conversación son funciones terminadas. Esta lista conserva el alcance completo para continuar el proyecto.
+
+| Área | Estado actual | Ampliación pendiente |
+|---|---|---|
+| DEPEC y seis grupos | Implementado: directorio, fichas, colores, iglesia, dirección, horario y edición | Logos propios, contacto/redes configurables, activar/inactivar grupos desde interfaz |
+| Página pública | Implementado: inicio, página por grupo, noticias, calendario y galería | Presentación institucional oficial, contacto y documentos públicos |
+| Usuarios y directivas | Implementado: cuentas, cargos múltiples, varios vocales, periodos, historial, desactivación, permisos adicionales | Invitaciones por correo, vencimiento automático de cargos y recuperación de cuenta |
+| Publicaciones | Implementado: CRUD, categorías, visibilidad, borrador, fecha futura y afiche | Flujo formal de aprobación, publicación fijada y múltiples adjuntos |
+| Calendario y eventos | Implementado: mensual, colores, filtros, eventos de varios días, estados y afiche | Vistas semanal/lista, recurrencia, detección de cruces, múltiples organizadores, enlaces virtuales y exportación ICS |
+| Miembros | Implementado: padrón privado, filtros de texto, bautismo, fechas, contacto, apoderado y exportación | Importación Excel/CSV, duplicados, traslados con historial y campos personalizados |
+| Cumpleaños | Implementado: listado mensual privado e indicador de consentimiento | Calendario de cuadrícula, recordatorios, tarjetas y publicación consentida |
+| Secretaría | Implementado: tipos documentales, archivos privados, periodos y estados | Historial de versiones de archivo, plantillas y documentos generados |
+| Solicitudes | Implementado: registro individual por grupo, archivo de respuesta, vencimiento y estado | Solicitar a todos los grupos en una operación, revisión diferenciada y notificaciones |
+| Tesorería | Implementado: ingresos/egresos PEN, categorías, comprobantes, cuentas y estado de aprobación | Cierres inmutables, doble aprobación, fondos por cuenta, conciliación, saldos por periodo y rendición formal |
+| Presupuesto y plan | Implementado: actividades, objetivos, responsables, presupuesto, fechas y avance | Comparativo presupuesto/ejecución, evidencias y cierre anual automático |
+| Reuniones | Implementado: agenda, acuerdos escritos, convocatoria y asistencia | Convocatorias enviadas, confirmaciones, acuerdos convertidos en tareas y acta generada |
+| Inscripciones | Implementado: registro interno de miembros del grupo anfitrión con cupos | Registro público, invitados externos y participación entre grupos |
+| Galería | Implementado: fotografía, descripción, fecha, borrador y visibilidad | Álbumes, carga múltiple, videos y moderación |
+| Panel / alertas | Implementado: próximos eventos, tareas y entregas pendientes | Centro de notificaciones con leído/no leído, correo y enlaces WhatsApp |
+| Reportes | Implementado: acumulados por organización, CSV e impresión a PDF | Filtros por periodos, gráficas, reportes de asistencia y PDF con formato institucional |
+| Auditoría | Implementado: registro básico de acciones con usuario/fecha | Diferencias antes/después, retención y protección contra manipulación administrativa |
+| Copias | Implementado: script manual con copia consistente de SQLite | Programación, cifrado y prueba de restauración automatizada |
+| Interfaz | Implementado: diseño adaptable por CSS, menú móvil, navegación y estados vacíos | Verificación visual en navegador de escritorio/móvil y pruebas de accesibilidad completas |
+
+## Orden sugerido de siguientes iteraciones
+
+1. Validar matriz de permisos y aprobación con líderes DEPEC, secretaría y tesorería.
+2. Separar entidades principales en tablas y añadir migraciones; preservar los datos creados en el piloto.
+3. Implementar traslados, importación del padrón y solicitudes documentales masivas.
+4. Añadir flujos de aprobación, versiones documentales y cierres de tesorería.
+5. Completar calendario recurrente, notificaciones y reportes por periodo.
+6. Preparar despliegue con HTTPS, recuperación de cuentas, respaldo y validación con usuarios.
+
+## Limitaciones conocidas
+
+- Las operaciones de consulta cargan los registros del módulo y filtran en Python; se necesita paginación y filtrado SQL para grandes padrones.
+- No hay bloqueo optimista: dos ediciones simultáneas pueden sobrescribirse.
+- Las inscripciones no tienen todavía control transaccional suficiente para cupos con alta concurrencia.
+- Un secretario puede editar el estado de sus documentos y solicitudes; aún no existe una revisión institucional separada.
+- Quien tiene permiso de gestión puede eliminar registros. El historial conserva la acción, pero no recupera el contenido eliminado.
+- Reemplazar un adjunto no conserva su versión anterior; pueden quedar archivos huérfanos para limpieza administrativa futura.
+- El límite de intentos de acceso es por correo y no sustituye un control de abuso de infraestructura.
+- Un cambio de contraseña no invalida otras sesiones existentes; la desactivación de cuenta sí bloquea sus solicitudes posteriores.
+- El navegador remoto no pudo conectarse al servidor local durante esta entrega: las pruebas realizadas son de servidor y no validan la apariencia en dispositivos reales.
+
+No cargar padrones reales ni utilizar saldos del prototipo como contabilidad oficial hasta completar la revisión y preparación del piloto.
