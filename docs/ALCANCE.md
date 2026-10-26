@@ -46,3 +46,7 @@ El objetivo es probar los flujos principales de la propuesta y recoger feedback.
 - El navegador remoto no pudo conectarse al servidor local durante esta entrega: las pruebas realizadas son de servidor y no validan la apariencia en dispositivos reales.
 
 No cargar padrones reales ni utilizar saldos del prototipo como contabilidad oficial hasta completar la revisión y preparación del piloto.
+
+## Actualización de diseño v0.2
+
+Se incorpora portada editorial, imágenes generadas identificadas como referencia, menú público adaptable, accesos rápidos, tarjetas de eventos, filtros SEC/GJ, información por grupo, galería de ejemplo y preguntas frecuentes. Los cambios se describen en `ACTUALIZAR_v0.2.md`; las ampliaciones funcionales pendientes de la tabla anterior mantienen su estado.

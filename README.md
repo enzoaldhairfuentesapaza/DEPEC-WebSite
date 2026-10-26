@@ -1,6 +1,12 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.1 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.2 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Novedades visuales de la versión 0.2
+
+Portada rediseñada con navegación pública, accesos rápidos, imágenes de referencia generadas con IA, tarjetas de eventos con detalles, filtros SEC/GJ, información de cada grupo, galería y preguntas frecuentes. Menú móvil con teclado, estados accesibles y navegación usable sin JavaScript. Las fotografías ilustrativas no representan actividades ni integrantes reales.
+
+Si ya tienes la versión anterior, lee `ACTUALIZAR_v0.2.md`. No necesitas reiniciar ni volver a cargar la base de datos.
 
 ## Inicio rápido en Windows
 
