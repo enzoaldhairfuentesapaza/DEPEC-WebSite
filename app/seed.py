@@ -37,3 +37,5 @@ def seed(db):
     for title in ['Campamento de líderes','Agradecidos al Rey 2026']:
         db.execute('INSERT INTO albums(group_id,title,description,created_by,created) VALUES(1,?,?,1,?)',(title,'Álbum de ejemplo. Los líderes pueden aportar aquí las fotografías del encuentro.',datetime.now().isoformat(timespec='seconds')))
     db.commit()
+    from .retro_demo import seed_visual_demo
+    seed_visual_demo(db)

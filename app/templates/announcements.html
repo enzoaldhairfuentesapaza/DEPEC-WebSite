@@ -1,0 +1,14 @@
+{% if announcements %}
+<section id="anuncios" class="announcement-board" aria-labelledby="announcement-heading" data-announcement-board data-server-now="{{ announcements_now_ms }}">
+  <div class="announcement-heading"><span class="announcement-pin" aria-hidden="true">⚑</span><div><p class="eyebrow">PARA TENERLO EN CUENTA · {{ page_settings.name }}</p><h2 id="announcement-heading">Tablón de anuncios</h2></div></div>
+  <div class="announcement-list">
+  {% for notice in announcements %}
+    <article class="announcement-note priority-{{ notice.d.category|lower }}" data-announcement-card>
+      <div class="announcement-note-top"><span class="announcement-priority">{{ notice.d.category }}</span><span class="announcement-church">{{ notice.group_name }}</span></div>
+      <h3>{{ notice.d.title }}</h3><p class="announcement-body preline">{{ notice.d.body }}</p>
+      <div class="announcement-note-footer"><span class="announcement-countdown" role="timer" aria-live="off" aria-label="Tiempo restante del anuncio" data-announcement-deadline="{{ notice.deadline_ms }}">Vence en {{ notice.remaining }}</span><span class="announcement-until">Hasta <time datetime="{{ notice.end_at }}">{{ notice.d.end_date[8:10] }}/{{ notice.d.end_date[5:7] }}/{{ notice.d.end_date[:4] }} · {{ notice.d.end_date[11:16] }} h</time> (Perú)</span></div>
+    </article>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}

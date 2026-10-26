@@ -1,6 +1,24 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.3 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.4.1 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Novedades v0.4.1 — tablón de anuncios temporales
+
+En **Panel → Tablón de anuncios** cada organización puede crear avisos con prioridad, fecha de inicio y vencimiento. Solo aparecen en su propia portada durante su vigencia, con una cuenta regresiva. Si no hay anuncios vigentes, no se muestra la sección. Al vencer se retiran de la página, pero se conservan en el panel.
+
+No se cargan anuncios de cancelación como datos demo: el tablón inicia vacío. Instrucciones en `ACTUALIZAR_v0.4.1.md`.
+
+## Novedades v0.4 — retro, claro y oscuro
+
+Diseño retro con colores protagonistas por iglesia, bordes de impresión y modos claro/oscuro/sistema. DEPEC muestra las comunidades antes de los eventos; las páginas SEC/GJ muestran solo su propia comunidad. El collage presenta hasta seis eventos en un marco cuadrado de escritorio y adapta su composición en celular.
+
+Jorge Chávez incluye la foto y los textos aportados por el usuario, su enlace real de Maps, líderes y miembros ficticios, eventos con afiches retro y álbumes con escenas IA. En bases de demostración se cargan los ejemplos una sola vez, sin eliminar registros anteriores. Las instalaciones reales sin la cuenta admin@depec.demo no reciben datos ficticios.
+
+Cada iglesia puede configurar su título, descripción, versículos y fecha de fundación. Los miembros pueden elegir entre cinco avatares cristianos o una fotografía y personalizar su perfil público, sujeto a aprobación.
+
+**Para mirar el diseño sin iniciar el servidor:** después de descomprimir, abre `preview/index.html` o `preview/jorge-chavez.html`. Son vistas estáticas: las acciones de calendario, álbumes y formularios necesitan la aplicación funcionando.
+
+Instrucciones completas en `ACTUALIZAR_v0.4.md`.
 
 ## Novedades v0.3
 

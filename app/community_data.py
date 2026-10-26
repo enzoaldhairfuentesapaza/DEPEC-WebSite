@@ -1,6 +1,6 @@
 """Migración aditiva y reglas de presentación compartidas."""
 import json
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from random import Random
 from urllib.parse import urlencode
@@ -21,6 +21,9 @@ def upgrade_schema(connection):
     for name,definition in [('photo',"TEXT NOT NULL DEFAULT ''"),('maps_url',"TEXT NOT NULL DEFAULT ''")]:
         if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
     connection.executescript((Path(__file__).parent/'community_schema.sql').read_text())
+    for name,definition in [('hero_title',"TEXT NOT NULL DEFAULT ''"),('hero_description',"TEXT NOT NULL DEFAULT ''"),('verse_mode',"TEXT NOT NULL DEFAULT 'daily'"),('custom_verses',"TEXT NOT NULL DEFAULT '[]'"),('founded_date',"TEXT NOT NULL DEFAULT ''"),('anniversary_note',"TEXT NOT NULL DEFAULT ''")]:
+        if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
+    connection.executescript((Path(__file__).parent/'retro_schema.sql').read_text())
     # Incorpora adjuntos anteriores sin borrar ni mover los archivos originales.
     upload_root=Path(connection.execute('PRAGMA database_list').fetchone()[2]).parent/'uploads'
     for rid,module,gid,raw,uid,created in connection.execute("SELECT id,module,group_id,data,author_id,created FROM records WHERE module IN ('events','posts','gallery')").fetchall():
@@ -40,7 +43,7 @@ def upgrade_schema(connection):
             with Image.open(upload_root/data['attachment']) as im:width,height=im.size
         except (OSError,ValueError):pass
         connection.execute('INSERT INTO media_files(group_id,album_id,record_id,title,kind,filename,width,height,uploaded_by,visibility,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(gid,aid,rid,data['title'],data.get('media_kind') or ('Fotografía' if module=='gallery' else 'Afiche'),data['attachment'],width,height,uid,data.get('visibility','internal'),created))
-    connection.execute('PRAGMA user_version=3')
+    connection.execute('PRAGMA user_version=4')
     connection.commit()
 
 def picture_info(file):
@@ -80,3 +83,44 @@ def daily_verse(day=None):
     day=day or local_now().date()
     ref,text=VERSES[VERSE_ORDER[day.toordinal()%len(VERSE_ORDER)]]
     return dict(reference=ref,text=text,date=day.isoformat(),version='Reina-Valera 1909')
+
+
+def group_verse(group,day=None):
+    day=day or local_now().date()
+    if group['verse_mode']=='off':return None
+    if group['verse_mode']=='custom':
+        try:items=json.loads(group['custom_verses'])
+        except (ValueError,TypeError):items=[]
+        if items:
+            item=items[day.toordinal()%len(items)]
+            return dict(reference=item['reference'],text=item['text'],version=item.get('version') or 'Texto de la comunidad',date=day.isoformat())
+    return daily_verse(day)
+
+
+def anniversary(group,day=None):
+    day=day or local_now().date()
+    if not group['founded_date']:return None
+    try:founded=date.fromisoformat(group['founded_date'])
+    except ValueError:return None
+    if founded>day:return None
+    # Para un 29 de febrero, celebramos el 28 en años no bisiestos.
+    try:next_day=founded.replace(year=day.year)
+    except ValueError:next_day=date(day.year,2,28)
+    current_anniversary=next_day
+    if next_day<day:
+        try:next_day=founded.replace(year=day.year+1)
+        except ValueError:next_day=date(day.year+1,2,28)
+    completed=day.year-founded.year-int(day<current_anniversary)
+    return dict(date=founded.isoformat(),next_date=next_day.isoformat(),years=completed,next_years=next_day.year-founded.year,note=group['anniversary_note'])
+
+
+def contrast_color(hex_color):
+    try:
+        value=hex_color.lstrip('#');parts=[int(value[i:i+2],16)/255 for i in [0,2,4]]
+        linear=[x/12.92 if x<=.04045 else ((x+.055)/1.055)**2.4 for x in parts]
+        return '#18151b' if sum(x*w for x,w in zip(linear,[.2126,.7152,.0722]))>.38 else '#ffffff'
+    except (ValueError,IndexError):return '#ffffff'
+
+def verse_lines(value):
+    try:return '\n'.join(item['reference']+' | '+item['text'] for item in json.loads(value))
+    except (ValueError,KeyError,TypeError):return ''

@@ -108,3 +108,29 @@ document.querySelectorAll('[data-calendar-event]').forEach(link => {
     }
   });
 });
+
+// Cuenta regresiva basada en la hora del servidor, sin depender del reloj del visitante.
+const announcementBoard = document.querySelector('[data-announcement-board]');
+if (announcementBoard) {
+  const serverNow = Number(announcementBoard.dataset.serverNow);
+  const started = performance.now();
+  let announcementInterval;
+  const tickAnnouncements = () => {
+    const now = serverNow + (performance.now() - started);
+    announcementBoard.querySelectorAll('[data-announcement-deadline]').forEach(timer => {
+      let seconds = Math.max(0, Math.ceil((Number(timer.dataset.announcementDeadline) - now) / 1000));
+      if (now >= Number(timer.dataset.announcementDeadline)) { timer.closest('[data-announcement-card]')?.remove(); return; }
+      const days = Math.floor(seconds / 86400); seconds %= 86400;
+      const hours = Math.floor(seconds / 3600); seconds %= 3600;
+      const minutes = Math.floor(seconds / 60); seconds %= 60;
+      const pad = value => String(value).padStart(2,'0');
+      timer.textContent = `Vence en ${days ? days + 'd ' : ''}${pad(hours)}h ${pad(minutes)}min ${pad(seconds)}s`;
+    });
+    if (!announcementBoard.querySelector('[data-announcement-card]')) {
+      announcementBoard.remove(); window.clearInterval(announcementInterval);
+    }
+  };
+  tickAnnouncements();
+  if (announcementBoard.isConnected) announcementInterval = window.setInterval(tickAnnouncements,1000);
+  document.addEventListener('visibilitychange', () => { if (announcementBoard.isConnected) tickAnnouncements(); });
+}

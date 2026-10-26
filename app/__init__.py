@@ -17,12 +17,14 @@ from flask import Flask, abort, flash, g, redirect, render_template, request, se
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from .modules import MODULES, ROLES
-from .community_data import upgrade_schema, local_now, event_presentation, picture_info
+from .community_data import upgrade_schema, local_now, event_presentation, picture_info, contrast_color, verse_lines
 from .community import register_community
+from .announcements import announcement_state
 
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
+    app.jinja_env.filters['verse_lines']=verse_lines
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     keyfile = Path(app.instance_path) / 'session.key'
     if not keyfile.exists():
@@ -33,7 +35,10 @@ def create_app(test_config=None):
         app.config.update(test_config)
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True,exist_ok=True)
     if Path(app.config['DATABASE']).exists():
-        with sqlite3.connect(app.config['DATABASE']) as connection: upgrade_schema(connection)
+        with sqlite3.connect(app.config['DATABASE']) as connection:
+            upgrade_schema(connection)
+            from .retro_demo import seed_visual_demo
+            seed_visual_demo(connection)
 
     def db():
         if 'db' not in g:
@@ -84,6 +89,7 @@ def create_app(test_config=None):
         result=[]
         for row in rows:
             item=dict(row); item['d']=json.loads(row['data'])
+            if module=='announcements':item['d']['display_status']=announcement_state(item['d'])
             if module=='events':
                 gr=db().execute('SELECT * FROM groups WHERE id=?',(item['group_id'],)).fetchone()
                 item['d']=event_presentation(item['d'],gr)
@@ -110,7 +116,7 @@ def create_app(test_config=None):
         def wrapped(*args,**kwargs):
             if not g.user:
                 return redirect(url_for('login'))
-            if not community['is_leader']() and db().execute('SELECT 1 FROM memberships WHERE user_id=?',(g.user['id'],)).fetchone() and request.endpoint not in ['dashboard','account','community.member_home']:
+            if not community['is_leader']() and db().execute('SELECT 1 FROM memberships WHERE user_id=?',(g.user['id'],)).fetchone() and request.endpoint not in ['dashboard','account','community.member_home','retro.member_profile']:
                 abort(403)
             return fn(*args,**kwargs)
         return wrapped
@@ -138,7 +144,7 @@ def create_app(test_config=None):
         response.headers['X-Frame-Options']='DENY'
         response.headers['Referrer-Policy']='same-origin'
         response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-        if g.get('user'):
+        if g.get('user') or request.endpoint=='public':
             response.headers['Cache-Control']='no-store'
         return response
 
@@ -151,7 +157,7 @@ def create_app(test_config=None):
             album=db().execute('SELECT group_id FROM albums WHERE id=?',((request.view_args or {}).get('album_id'),)).fetchone()
             if album:scope=album['group_id']
         brand_group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
+        return dict(contrast_color=contrast_color,brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
 
     @app.route('/')
     def public():
@@ -258,6 +264,9 @@ def create_app(test_config=None):
                 target=get_record(int(value))
                 if target['module']!='events' or target['group_id']!=group_id: raise ValueError('El evento debe pertenecer al mismo grupo.')
             data[key]=value
+        if module=='announcements':
+            start=datetime.fromisoformat(data['date']);end=datetime.fromisoformat(data['end_date'])
+            if start.tzinfo or end.tzinfo or end<=start:raise ValueError('El vencimiento debe ser posterior al inicio, con la hora local de Perú.')
         if module=='events':
             group=db().execute('SELECT * FROM groups WHERE id=?',(group_id,)).fetchone()
             if not data.get('location'):data['location']=group['address']
@@ -494,6 +503,11 @@ def create_app(test_config=None):
     def seed_demo():
         from .seed import seed
         seed(db()); click.echo('Datos ficticios creados. Consulta README.md para ingresar.')
+
+    @app.cli.command('demo-retro')
+    def demo_retro():
+        from .retro_demo import seed_visual_demo
+        upgrade_schema(db());added=seed_visual_demo(db());click.echo('Ejemplos retro añadidos.' if added else 'No se añadieron duplicados; exige una base de demostración.')
 
     @app.cli.command('create-admin')
     @click.option('--email',prompt=True)

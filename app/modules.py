@@ -18,3 +18,5 @@ for key in ['events','posts']:
     MODULES[key]['fields'].append(f('attachment','Afiche o imagen (PNG o JPG)','file',required=False))
 
 MODULES['events']['fields'].append(f('media_kind','Tipo de imagen','select',['Afiche','Fotografía'],required=False))
+
+MODULES={'announcements':dict(title='Tablón de anuncios',singular='anuncio',icon='⚑',description='Avisos temporales de tu organización. Se publican solo entre la fecha de inicio y vencimiento; si no hay avisos vigentes, el tablón se oculta.',fields=[f('title','Título del aviso'),f('body','Mensaje','textarea'),f('category','Prioridad','select',['Informativo','Importante','Urgente']),f('date','Mostrar desde (hora de Perú)','datetime-local'),f('end_date','Ocultar al vencer (hora de Perú)','datetime-local'),f('status','Publicación','select',['Borrador','Publicado','Retirado'])]),**MODULES}

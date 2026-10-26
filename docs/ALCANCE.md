@@ -54,3 +54,11 @@ Se incorpora portada editorial, imágenes generadas identificadas como referenci
 ## Actualización v0.3 — reemplaza los estados anteriores de estas funciones
 
 Se implementan identidad basada en el logo DEPEC y fotografía de Jerusalén, configuración del local y color por iglesia, hero con archivos propios clasificados, versículo diario local, collage de eventos por orientación, estado Finalizado automático al consultar, enlaces Maps y tarjeta lateral del calendario. También se añaden registro y aprobación de miembros, mensajes moderados, álbumes con contribuciones por alcance y metadatos de autor/iglesia/álbum, y perfiles públicos autorizados de directiva. La migración es aditiva y conserva el contenido anterior. Detalles y límites en `ACTUALIZAR_v0.3.md`.
+
+## Actualización v0.4
+
+Se añaden diseño retro y temas claro/oscuro/sistema; comunidades solo en DEPEC y antes de eventos; collage limitado a seis tarjetas, cuadrado en escritorio; escenario ficticio completo de DEPEC/Jorge Chávez con afiches, líderes, miembros y álbumes; personalización del hero y lista de versículos por iglesia; aniversario configurable con cálculo de años; perfiles públicos optativos de miembros con avatares y revisión por líderes. Se incluyen vistas estáticas del diseño. Información aportada, ejemplos y límites se detallan en `ACTUALIZAR_v0.4.md`.
+
+## Actualización v0.4.1
+
+Tablón público de anuncios por organización, con prioridad, inicio, vencimiento y cuenta regresiva. Los borradores, anuncios retirados, programados o vencidos no se muestran. La sección completa se omite si está vacía. Los anuncios vencidos se conservan en el panel; JavaScript retira los visibles al vencer sin recargar. Gestión por los permisos existentes. Detalles en `ACTUALIZAR_v0.4.1.md`.

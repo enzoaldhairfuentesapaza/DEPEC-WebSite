@@ -43,9 +43,9 @@ def test_all_pages_render(client,app):
         assert client.get(path).status_code==200,path
     from app.modules import MODULES
     for module in MODULES:
-        if module=='gallery':
-            assert client.get('/manage/gallery').status_code==200
-            assert client.get('/manage/gallery/new').status_code==200
+        if module in ['gallery','announcements']:
+            assert client.get('/manage/'+module).status_code==200
+            assert client.get('/manage/'+module+'/new').status_code==200
             continue
         for path in [f'/manage/{module}',f'/manage/{module}/new',f'/manage/{module}/{record(app,module)}/edit',f'/export/{module}']:
             assert client.get(path).status_code==200,path
@@ -336,7 +336,7 @@ def test_upgrade_from_v02_preserves_data_and_is_idempotent(tmp_path):
         assert db.execute('SELECT name FROM users WHERE id=1').fetchone()[0]=='Nombre conservado'
         assert json.loads(db.execute('SELECT data FROM records').fetchone()[0])['title']=='No borrar esta tarea'
         assert 'maps_url' in [r[1] for r in db.execute('PRAGMA table_info(groups)')]
-        assert db.execute('PRAGMA user_version').fetchone()[0]==3
+        assert db.execute('PRAGMA user_version').fetchone()[0]==4
         assert db.execute('SELECT count(*) FROM media_files').fetchone()[0]==0
 
 def test_private_album_is_not_exposed_to_foreign_church(client,app):
@@ -347,3 +347,153 @@ def test_private_album_is_not_exposed_to_foreign_church(client,app):
     assert client.get(f'/album/{aid}').status_code==403
     login(client,'israel@depec.demo')
     assert client.get(f'/album/{aid}').status_code==403
+
+# v0.4: portada por iglesia, contenido configurable y perfiles voluntarios.
+def test_retro_demo_and_home_scope(client,app):
+    from html.parser import HTMLParser
+    class Layout(HTMLParser):
+        def __init__(self):super().__init__();self.ids=[];self.collage_count=None;self.inside=False;self.tiles=0
+        def handle_starttag(self,tag,attrs):
+            a=dict(attrs)
+            if a.get('id'):self.ids.append(a['id'])
+            if 'retro-collage' in a.get('class',''):self.collage_count=int(a['data-count'])
+    root=client.get('/').get_data(as_text=True);jc=client.get('/?group=3').get_data(as_text=True)
+    page=Layout();page.feed(root)
+    assert page.ids.index('grupos')<page.ids.index('eventos')
+    assert page.collage_count==6
+    church=Layout();church.feed(jc)
+    assert 'grupos' not in church.ids and church.collage_count==6
+    assert 'Más que una iglesia, una familia que camina junta' in jc
+    assert 'Nos conocemos bien, compartimos la vida sin filtros' in jc
+    assert 'Colosenses 3:14' in jc and 'KSo2PasAcs3HdyU36' in jc
+    assert 'Fecha de aniversario por confirmar' in jc
+    assert 'Perfil ficticio' in jc and 'Evento ficticio' in jc
+    assert client.get('/iglesia/3/foto').status_code==200
+
+def test_custom_hero_verse_configuration_and_anniversary(client,app):
+    csrf=login(client,'israel@depec.demo')
+    data=dict(csrf=csrf,group_id=2,color='#dfb82f',hero_title='Una comunidad que acompaña',hero_description='Cada día caminamos juntos.',description='Nuestra casa',verse_mode='custom',verse_lines='Referencia A | Primer texto\nReferencia B | Segundo texto',founded_date='2000-11-15',anniversary_note='Dato de prueba',address='Dirección de ejemplo 12',maps_url='')
+    assert client.post('/panel/identidad',data=data).status_code==302
+    html=client.get('/?group=2').get_data(as_text=True)
+    assert 'Una comunidad que acompaña' in html and ('Primer texto' in html or 'Segundo texto' in html)
+    assert 'Dato de prueba' in html
+    data['verse_mode']='off'
+    client.post('/panel/identidad',data=data)
+    assert 'class="daily-verse"' not in client.get('/?group=2').get_data(as_text=True)
+    data.update(group_id=3)
+    assert client.post('/panel/identidad',data=data).status_code==403
+
+def test_member_profile_requires_approval_and_is_self_managed(client,app):
+    # Cuenta de demostración ya verificada; no tiene permisos de líder.
+    assert client.post('/login',data=dict(csrf=token(client),email='miembro-0@demo.depec.local',password='DepecDemo2026!')).status_code==302
+    with client.session_transaction() as session:csrf=session['csrf'];uid=session['uid']
+    assert client.get('/mi-perfil').status_code==200
+    message='Mi perfil personalizado todavía debe revisarse.'
+    data=dict(csrf=csrf,message=message,verse_ref='Salmos 23:1',verse_text='El Señor es mi pastor.',likes='Música',gifts='Escuchar',dislikes='La falta de respeto',avatar='pez',published='1')
+    assert client.post('/mi-perfil',data=data).status_code==302
+    assert message not in client.get('/?group=3').get_data(as_text=True)
+    assert client.get(f'/miembros/{uid}/foto').status_code==200
+    client.post('/logout',data={'csrf':csrf})
+    assert client.get(f'/miembros/{uid}/foto').status_code==403
+    csrf=login(client,'israel@depec.demo')
+    assert client.post('/panel/aprobaciones',data=dict(csrf=csrf,action='profile',id=uid,decision='Aprobado')).status_code==403
+    client.post('/logout',data={'csrf':csrf});csrf=login(client)
+    assert client.post('/panel/aprobaciones',data=dict(csrf=csrf,action='profile',id=uid,decision='Aprobado')).status_code==302
+    assert message in client.get('/?group=3').get_data(as_text=True)
+    assert message in client.get('/').get_data(as_text=True)
+    assert message not in client.get('/?group=2').get_data(as_text=True)
+    client.post('/logout',data={'csrf':csrf})
+    assert client.get(f'/miembros/{uid}/foto').status_code==200
+
+def test_profile_opt_out_removes_public_card(client,app):
+    client.post('/login',data=dict(csrf=token(client),email='miembro-1@demo.depec.local',password='DepecDemo2026!'))
+    with client.session_transaction() as session:csrf=session['csrf'];uid=session['uid']
+    assert client.post('/mi-perfil',data=dict(csrf=csrf,avatar='cruz',message='Este perfil está retirado.')).status_code==302
+    assert 'Este perfil está retirado.' not in client.get('/').get_data(as_text=True)
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT published FROM member_profiles WHERE user_id=?',(uid,)).fetchone()[0]==0
+
+def test_anniversary_and_configured_daily_verses():
+    from app.community_data import anniversary,group_verse
+    data=dict(founded_date='2000-11-15',anniversary_note='Ejemplo')
+    assert anniversary(data,date(2026,11,14))['years']==25
+    assert anniversary(data,date(2026,11,15))['years']==26
+    assert anniversary(data,date(2026,11,16))['next_years']==27
+    assert anniversary(dict(founded_date='',anniversary_note=''),date(2026,10,26)) is None
+    assert anniversary(dict(founded_date='2000-02-29',anniversary_note=''),date(2025,2,28))['years']==25
+    group=dict(verse_mode='custom',custom_verses=json.dumps([dict(reference='A',text='Texto A'),dict(reference='B',text='Texto B')]))
+    a=group_verse(group,date(2026,10,26));b=group_verse(group,date(2026,10,27))
+    assert a['reference']!=b['reference']
+
+def test_retro_demo_idempotent_and_does_not_run_on_real_install(tmp_path):
+    from app.community_data import upgrade_schema
+    from app.retro_demo import seed_visual_demo
+    db=sqlite3.connect(tmp_path/'blank.sqlite')
+    db.executescript((Path(__file__).parents[1]/'app'/'schema.sql').read_text());upgrade_schema(db)
+    db.execute("INSERT INTO groups(name,kind,color) VALUES('DEPEC','DEPEC','#bd123b')")
+    db.execute("INSERT INTO users(name,email,password) VALUES('Usuario real','real@example.com','hash')")
+    assert seed_visual_demo(db) is False
+    assert db.execute('SELECT count(*) FROM users').fetchone()[0]==1
+    db.close()
+
+def notice_payload(csrf,gid=3,**changes):
+    from app.community_data import local_now
+    at=local_now()
+    values=dict(csrf=csrf,group_id=gid,title='Aviso temporal de prueba',body='Esta semana se cancela el culto por elecciones, nos vemos la siguiente semana.',category='Importante',date=(at-timedelta(hours=1)).isoformat(timespec='minutes'),end_date=(at+timedelta(days=2)).isoformat(timespec='minutes'),status='Publicado')
+    values.update(changes);return values
+
+def test_announcement_board_empty_hidden_and_scoped(client,app):
+    assert 'id="anuncios"' not in client.get('/').get_data(as_text=True)
+    assert 'id="anuncios"' not in client.get('/?group=3').get_data(as_text=True)
+    csrf=login(client)
+    assert client.post('/manage/announcements/new',data=notice_payload(csrf)).status_code==302
+    html=client.get('/?group=3').get_data(as_text=True)
+    assert 'id="anuncios"' in html and 'Esta semana se cancela el culto' in html
+    assert 'data-announcement-deadline=' in html and 'Vence en ' in html and '(Perú)' in html
+    assert 'id="anuncios"' not in client.get('/').get_data(as_text=True)
+    assert 'id="anuncios"' not in client.get('/?group=2').get_data(as_text=True)
+
+def test_announcement_states_and_expiration_boundaries():
+    from app.announcements import announcement_state,countdown_label
+    from datetime import datetime
+    at=datetime(2026,10,26,12)
+    d=dict(status='Publicado',date='2026-10-26T12:00',end_date='2026-10-26T13:00')
+    assert announcement_state(d,at)=='Vigente'
+    assert announcement_state(d,at-timedelta(seconds=1))=='Programado'
+    assert announcement_state(d,at+timedelta(hours=1))=='Vencido'
+    assert announcement_state({**d,'status':'Borrador'},at)=='Borrador'
+    assert announcement_state({**d,'status':'Retirado'},at)=='Retirado'
+    assert countdown_label(90061)=='1d 01h 01min 01s'
+
+def test_drafts_future_expired_and_withdrawn_not_public(client,app):
+    from app.community_data import local_now
+    csrf=login(client);now=local_now()
+    variants=[dict(status='Borrador'),dict(status='Retirado'),dict(date=(now+timedelta(days=1)).isoformat(timespec='minutes')),dict(date=(now-timedelta(days=2)).isoformat(timespec='minutes'),end_date=(now-timedelta(seconds=1)).isoformat(timespec='seconds'))]
+    for variant in variants:assert client.post('/manage/announcements/new',data=notice_payload(csrf,**variant)).status_code==302
+    html=client.get('/?group=3').get_data(as_text=True)
+    assert 'id="anuncios"' not in html and 'Esta semana se cancela el culto' not in html
+
+def test_announcements_permissions_validation_and_priority(client,app):
+    csrf=login(client,'israel@depec.demo')
+    assert client.post('/manage/announcements/new',data=notice_payload(csrf,gid=3)).status_code==403
+    assert client.post('/manage/announcements/new',data=notice_payload(csrf,gid=2,end_date='2020-01-01T10:00')).status_code==200
+    assert client.post('/manage/announcements/new',data=notice_payload(csrf,gid=2,date='2026-10-26T10:00+00:00',end_date='2026-10-27T10:00+00:00')).status_code==200
+    assert client.post('/manage/announcements/new',data=notice_payload(csrf,gid=2,title='Aviso normal',category='Informativo')).status_code==302
+    assert client.post('/manage/announcements/new',data=notice_payload(csrf,gid=2,title='Aviso prioritario',category='Urgente')).status_code==302
+    html=client.get('/?group=2').get_data(as_text=True)
+    assert html.index('Aviso prioritario')<html.index('Aviso normal')
+    with sqlite3.connect(app.config['DATABASE']) as db:rid=db.execute("SELECT max(id) FROM records WHERE module='announcements'").fetchone()[0]
+    payload=notice_payload(csrf,gid=2,title='Aviso prioritario',status='Retirado')
+    assert client.post(f'/manage/announcements/{rid}/edit',data=payload).status_code==302
+    assert 'Aviso prioritario' not in client.get('/?group=2').get_data(as_text=True)
+
+def test_depec_announcement_and_expiry_without_database_deletion(client,app):
+    from app.community_data import local_now
+    csrf=login(client)
+    assert client.post('/manage/announcements/new',data=notice_payload(csrf,gid=1)).status_code==302
+    assert 'id="anuncios"' in client.get('/').get_data(as_text=True)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        rid,raw=db.execute("SELECT id,data FROM records WHERE module='announcements'").fetchone();d=json.loads(raw)
+        d['date']=(local_now()-timedelta(days=2)).isoformat(timespec='seconds');d['end_date']=(local_now()-timedelta(seconds=1)).isoformat(timespec='seconds')
+        db.execute('UPDATE records SET data=? WHERE id=?',(json.dumps(d),rid))
+    assert 'id="anuncios"' not in client.get('/').get_data(as_text=True)
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT count(*) FROM records WHERE id=?',(rid,)).fetchone()[0]==1

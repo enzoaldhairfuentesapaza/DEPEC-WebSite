@@ -1,5 +1,7 @@
 """Álbumes, archivos, perfiles y membresía aprobada. Permisos siempre en servidor."""
 import re
+import json
+from datetime import date
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -7,7 +9,10 @@ from uuid import uuid4
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, url_for
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
-from .community_data import daily_verse, picture_info
+from .community_data import daily_verse, picture_info, group_verse, anniversary, local_now
+from .retro import register_retro
+from .announcements import active_announcements
+from .community_data import LIMA
 
 
 def register_community(app, services):
@@ -57,7 +62,8 @@ def register_community(app, services):
 
     def public_context(scope):
         people=leaders(scope);ranking={'Presidente':0,'Vicepresidente':1,'Secretario':2,'Prosecretario':3,'Tesorero':4,'Protesorero':5,'Vocal':6}
-        return dict(hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=daily_verse())
+        group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
+        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,page_members=retro['public_members'](scope),anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
 
     @bp.get('/archivos/<int:file_id>')
     def asset(file_id):
@@ -161,19 +167,21 @@ def register_community(app, services):
         if not is_leader():abort(403)
         if request.method=='POST':
             action=request.form.get('action');decision=request.form.get('decision');item_id=request.form.get('id',type=int)
-            if action not in ['membership','message'] or decision not in ['Aprobado','Rechazado']:abort(400)
-            table='memberships' if action=='membership' else 'community_messages'
-            item=db().execute(f'SELECT * FROM {table} WHERE id=?',(item_id,)).fetchone()
+            if action not in ['membership','message','profile'] or decision not in ['Aprobado','Rechazado']:abort(400)
+            table='memberships' if action=='membership' else 'member_profiles' if action=='profile' else 'community_messages'
+            key='user_id' if action=='profile' else 'id'
+            item=db().execute('SELECT p.*,ms.group_id FROM member_profiles p JOIN memberships ms ON ms.user_id=p.user_id WHERE p.user_id=?',(item_id,)).fetchone() if action=='profile' else db().execute(f'SELECT * FROM {table} WHERE id=?',(item_id,)).fetchone()
             if not item:abort(404)
             if not can_review(item['group_id']):abort(403)
-            db().execute(f'UPDATE {table} SET status=?,reviewed_by=?,reviewed=? WHERE id=?',(decision,g.user['id'],now(),item_id))
+            db().execute(f'UPDATE {table} SET status=?,reviewed_by=?,reviewed=? WHERE {key}=?',(decision,g.user['id'],now(),item_id))
             if action=='membership':
                 # Solo activa cuentas creadas para miembros. Nunca concede cargos.
                 db().execute('UPDATE users SET active=? WHERE id=?',(int(decision=='Aprobado'),item['user_id']))
             audit(f'{decision}: {action} #{item_id}',item['group_id']);db().commit();flash('Revisión guardada.','success');return redirect(url_for('community.approvals'))
         applications=[r for r in db().execute('SELECT ms.*,u.name,u.email,gr.name group_name FROM memberships ms JOIN users u ON u.id=ms.user_id JOIN groups gr ON gr.id=ms.group_id ORDER BY ms.id DESC') if can_review(r['group_id'])]
         messages=[r for r in db().execute('SELECT m.*,u.name,gr.name group_name FROM community_messages m JOIN users u ON u.id=m.user_id JOIN groups gr ON gr.id=m.group_id ORDER BY m.id DESC') if can_review(r['group_id'])]
-        return render_template('approvals.html',applications=applications,messages=messages)
+        profiles=[r for r in db().execute('SELECT p.*,p.user_id id,u.name,ms.group_id,gr.name group_name FROM member_profiles p JOIN users u ON u.id=p.user_id JOIN memberships ms ON ms.user_id=p.user_id JOIN groups gr ON gr.id=ms.group_id ORDER BY p.updated DESC') if can_review(r['group_id'])]
+        return render_template('approvals.html',applications=applications,messages=messages,profile_reviews=profiles)
 
     @bp.route('/panel/identidad',methods=['GET','POST'])
     @logged
@@ -189,6 +197,25 @@ def register_community(app, services):
                 if maps:
                     parsed=urlsplit(maps)
                     if parsed.scheme!='https' or parsed.hostname not in ['www.google.com','google.com','maps.google.com','maps.app.goo.gl','goo.gl'] or parsed.username:raise ValueError('Usa un enlace HTTPS de Google Maps.')
+                existing=db().execute('SELECT * FROM groups WHERE id=?',(gid,)).fetchone()
+                hero_title=request.form.get('hero_title',existing['hero_title']).strip()
+                hero_description=request.form.get('hero_description',existing['hero_description']).strip()
+                mode=request.form.get('verse_mode',existing['verse_mode'])
+                if mode not in ['daily','custom','off']:raise ValueError('Modo de versículo inválido.')
+                verses=json.loads(existing['custom_verses'])
+                if 'verse_lines' in request.form:
+                    verses=[]
+                    for line in request.form['verse_lines'].splitlines():
+                        if not line.strip():continue
+                        parts=line.split('|',1)
+                        if len(parts)!=2 or not all(p.strip() for p in parts):raise ValueError('Escribe cada versículo como Referencia | Texto.')
+                        if len(parts[0])>100 or len(parts[1])>1000:raise ValueError('Versículo demasiado largo.')
+                        verses.append(dict(reference=parts[0].strip(),text=parts[1].strip(),version='Texto de la comunidad'))
+                if mode=='custom' and not verses:raise ValueError('Añade al menos un versículo para la lista propia.')
+                if len(verses)>50 or len(hero_title)>180 or len(hero_description)>1500:raise ValueError('Revisa el tamaño del título, descripción y lista de versículos.')
+                founded=request.form.get('founded_date',existing['founded_date'])
+                if founded and date.fromisoformat(founded)>local_now().date():raise ValueError('La fecha de fundación no puede ser futura.')
+                db().execute('UPDATE groups SET hero_title=?,hero_description=?,verse_mode=?,custom_verses=?,founded_date=?,anniversary_note=? WHERE id=?',(hero_title,hero_description,mode,json.dumps(verses),founded,request.form.get('anniversary_note',existing['anniversary_note'])[:250],gid))
                 photo=None;file=request.files.get('photo')
                 if file and file.filename:photo,_,_=save_image(file)
                 db().execute('UPDATE groups SET color=?,description=?,church=?,address=?,maps_url=?,schedule=? WHERE id=?',(color,request.form.get('description','')[:2000],request.form.get('church','')[:200],request.form.get('address','')[:500],maps,request.form.get('schedule','')[:500],gid))
@@ -203,6 +230,7 @@ def register_community(app, services):
         if not group:abort(404)
         if group['photo']:return send_file(Path(app.config['UPLOAD_FOLDER'])/group['photo'])
         if 'jerusal' in group['name'].lower():return send_file(Path(app.static_folder)/'images/jerusalen.jpg')
+        if 'jorge' in group['name'].lower():return send_file(Path(app.static_folder)/'images/jorge-chavez.jpg')
         if group_id==1:return send_file(Path(app.static_folder)/'images/depec-logo.jpg')
         return send_file(Path(app.static_folder)/'images/church-placeholder.svg',mimetype='image/svg+xml')
 
@@ -232,7 +260,9 @@ def register_community(app, services):
         if not profile or not profile['photo']:abort(404)
         visible=profile['published'] and db().execute('SELECT 1 FROM assignments a JOIN users u ON u.id=a.user_id WHERE a.user_id=? AND a.group_id=? AND a.active=1 AND u.active=1',(user_id,group_id)).fetchone()
         if not visible and not (g.user and (g.user['id']==user_id or can_review(group_id))):abort(403)
+        if profile['photo'].startswith('demo:'):return send_file(Path(app.static_folder)/profile['photo'][5:])
         return send_file(Path(app.config['UPLOAD_FOLDER'])/profile['photo'])
 
+    retro=register_retro(app,dict(db=db,logged=logged,audit=audit,now=now,save_image=save_image,can_review=can_review))
     app.register_blueprint(bp)
     return dict(public_context=public_context,is_leader=is_leader,can_review=can_review)
