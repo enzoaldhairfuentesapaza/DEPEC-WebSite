@@ -1,5 +1,7 @@
 """Migración aditiva y reglas de presentación compartidas."""
 import json
+import re
+import sqlite3
 from datetime import datetime, date
 from pathlib import Path
 from random import Random
@@ -12,18 +14,56 @@ LIMA=ZoneInfo('America/Lima')
 def local_now():
     return datetime.now(LIMA).replace(tzinfo=None)
 
+def repair_media_encoding(connection):
+    """Repara el CHECK creado al leer UTF-8 como Windows-1252; conserva IDs y archivos."""
+    row=connection.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='media_files'").fetchone()
+    if not row:return
+    schema=row[0]
+    pattern=r"CHECK\s*\(\s*kind\s+IN\s*\(\s*'Afiche'\s*,\s*'(Fotograf[^']*)'\s*\)\s*\)"
+    match=re.search(pattern,schema,re.IGNORECASE)
+    if not match or match.group(1)=='Fotografía':return
+    # No usamos writable_schema ni desactivamos las restricciones de integridad.
+    if connection.in_transaction:
+        raise RuntimeError('La reparación de media_files debe iniciarse sin una transacción pendiente.')
+    database=connection.execute('PRAGMA database_list').fetchone()[2]
+    if database:
+        source=Path(database)
+        backup=source.with_name(source.name+'.pre-utf8-'+datetime.now().strftime('%Y%m%d-%H%M%S-%f')+'.bak')
+        with sqlite3.connect(backup) as destination:connection.backup(destination)
+    repaired=schema[:match.start(1)]+'Fotografía'+schema[match.end(1):]
+    repaired=re.sub(r'^(CREATE\s+TABLE\s+)(?:IF\s+NOT\s+EXISTS\s+)?[\["`]?media_files[\]"`]?',r'\1media_files_utf8',repaired,count=1,flags=re.IGNORECASE)
+    extras=[r[0] for r in connection.execute("SELECT sql FROM sqlite_master WHERE tbl_name='media_files' AND type IN ('index','trigger') AND sql IS NOT NULL")]
+    columns=[r[1] for r in connection.execute('PRAGMA table_info(media_files)')]
+    quoted=', '.join('"'+name.replace('"','""')+'"' for name in columns)
+    selection=', '.join('CASE WHEN kind=? THEN ? ELSE kind END' if name=='kind' else '"'+name.replace('"','""')+'"' for name in columns)
+    connection.execute('SAVEPOINT repair_media_utf8')
+    try:
+        connection.execute(repaired)
+        connection.execute(f'INSERT INTO media_files_utf8 ({quoted}) SELECT {selection} FROM media_files',(match.group(1),'Fotografía'))
+        connection.execute('DROP TABLE media_files')
+        connection.execute('ALTER TABLE media_files_utf8 RENAME TO media_files')
+        for statement in extras:connection.execute(statement)
+        if connection.execute('PRAGMA foreign_key_check(media_files)').fetchone():
+            raise RuntimeError('La reparación detectó referencias inválidas en media_files.')
+        connection.execute('RELEASE repair_media_utf8')
+    except Exception:
+        connection.execute('ROLLBACK TO repair_media_utf8')
+        connection.execute('RELEASE repair_media_utf8')
+        raise
+
 def upgrade_schema(connection):
     if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='groups'").fetchone():
         return
+    repair_media_encoding(connection)
     if connection.execute('PRAGMA user_version').fetchone()[0]<3:
         connection.execute("UPDATE groups SET color='#bd123b' WHERE id=1 AND color='#d46a3b'")
     names={r[1] for r in connection.execute('PRAGMA table_info(groups)')}
     for name,definition in [('photo',"TEXT NOT NULL DEFAULT ''"),('maps_url',"TEXT NOT NULL DEFAULT ''")]:
         if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
-    connection.executescript((Path(__file__).parent/'community_schema.sql').read_text())
+    connection.executescript((Path(__file__).parent/'community_schema.sql').read_text(encoding='utf-8'))
     for name,definition in [('hero_title',"TEXT NOT NULL DEFAULT ''"),('hero_description',"TEXT NOT NULL DEFAULT ''"),('verse_mode',"TEXT NOT NULL DEFAULT 'daily'"),('custom_verses',"TEXT NOT NULL DEFAULT '[]'"),('founded_date',"TEXT NOT NULL DEFAULT ''"),('anniversary_note',"TEXT NOT NULL DEFAULT ''")]:
         if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
-    connection.executescript((Path(__file__).parent/'retro_schema.sql').read_text())
+    connection.executescript((Path(__file__).parent/'retro_schema.sql').read_text(encoding='utf-8'))
     # Incorpora adjuntos anteriores sin borrar ni mover los archivos originales.
     upload_root=Path(connection.execute('PRAGMA database_list').fetchone()[2]).parent/'uploads'
     for rid,module,gid,raw,uid,created in connection.execute("SELECT id,module,group_id,data,author_id,created FROM records WHERE module IN ('events','posts','gallery')").fetchall():

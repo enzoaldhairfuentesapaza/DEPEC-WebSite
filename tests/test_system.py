@@ -12,7 +12,7 @@ from app.seed import seed
 def app(tmp_path):
     app=create_app(dict(TESTING=True,DATABASE=str(tmp_path/'db.sqlite'),UPLOAD_FOLDER=str(tmp_path/'uploads'),SECRET_KEY='test-secret'))
     con=sqlite3.connect(app.config['DATABASE'])
-    con.executescript((Path(__file__).parents[1]/'app'/'schema.sql').read_text())
+    con.executescript((Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8'))
     seed(con); con.close()
     return app
 
@@ -326,7 +326,7 @@ def test_unsafe_maps_link_rejected(client,app):
 def test_upgrade_from_v02_preserves_data_and_is_idempotent(tmp_path):
     from app.community_data import upgrade_schema
     path=tmp_path/'old.sqlite'
-    old_schema=(Path(__file__).parents[1]/'app'/'schema.sql').read_text().split('CREATE TABLE IF NOT EXISTS albums')[0].replace(",photo TEXT NOT NULL DEFAULT '',maps_url TEXT NOT NULL DEFAULT ''",'')
+    old_schema=(Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8').split('CREATE TABLE IF NOT EXISTS albums')[0].replace(",photo TEXT NOT NULL DEFAULT '',maps_url TEXT NOT NULL DEFAULT ''",'')
     with sqlite3.connect(path) as db:
         db.executescript(old_schema)
         db.execute("INSERT INTO groups(id,name,kind,color) VALUES(1,'DEPEC','DEPEC','#bd123b')")
@@ -428,7 +428,7 @@ def test_retro_demo_idempotent_and_does_not_run_on_real_install(tmp_path):
     from app.community_data import upgrade_schema
     from app.retro_demo import seed_visual_demo
     db=sqlite3.connect(tmp_path/'blank.sqlite')
-    db.executescript((Path(__file__).parents[1]/'app'/'schema.sql').read_text());upgrade_schema(db)
+    db.executescript((Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8'));upgrade_schema(db)
     db.execute("INSERT INTO groups(name,kind,color) VALUES('DEPEC','DEPEC','#bd123b')")
     db.execute("INSERT INTO users(name,email,password) VALUES('Usuario real','real@example.com','hash')")
     assert seed_visual_demo(db) is False
@@ -497,3 +497,53 @@ def test_depec_announcement_and_expiry_without_database_deletion(client,app):
         db.execute('UPDATE records SET data=? WHERE id=?',(json.dumps(d),rid))
     assert 'id="anuncios"' not in client.get('/').get_data(as_text=True)
     with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT count(*) FROM records WHERE id=?',(rid,)).fetchone()[0]==1
+
+@pytest.mark.parametrize('broken_kind', ['Fotografía'.encode('utf-8').decode('cp1252'), 'Fotografía'.encode('utf-8').decode('latin1'), 'FotografÃa'])
+def test_windows_media_constraint_repaired_before_startup_demo(tmp_path,broken_kind):
+    path=tmp_path/'windows.sqlite'
+    schema=(Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8')
+    with sqlite3.connect(path) as db:
+        db.executescript(schema.replace("'Fotografía'", "'"+broken_kind+"'"))
+        for gid,name in [(1,'DEPEC'),(2,'SEC Israel'),(3,'SEC Jorge Chávez')]:
+            db.execute('INSERT INTO groups(id,name,kind,color) VALUES(?,?,?,?)',(gid,name,'SEC','#3453d1'))
+        db.execute("INSERT INTO users(id,name,email,password,admin) VALUES(1,'Nombre conservado','admin@depec.demo','hash-sin-cambios',1)")
+        aid=db.execute("INSERT INTO albums(group_id,title,created_by,created) VALUES(3,'Álbum conservado',1,'2026-01-01')").lastrowid
+        db.execute("INSERT INTO media_files(id,group_id,album_id,title,kind,filename,width,height,uploaded_by,visibility,created) VALUES(42,3,?,'Foto conservada',?,'no-mover.jpg',640,480,1,'internal','2026-01-01')",(aid,broken_kind))
+        db.execute("INSERT INTO media_files(id,group_id,title,kind,width,height,uploaded_by,created) VALUES(43,1,'Afiche conservado','Afiche',600,800,1,'2026-01-01')")
+        db.execute("INSERT INTO records(module,group_id,data,author_id,created,updated) VALUES('finance',3,?,1,'2026-01-01','2026-01-01')",(json.dumps({'title':'Ingreso conservado','amount':'123.45'}),))
+        db.execute('CREATE INDEX media_custom_title ON media_files(title)')
+    config=dict(TESTING=True,DATABASE=str(path),UPLOAD_FOLDER=str(tmp_path/'uploads'),SECRET_KEY='test')
+    app=create_app(config)
+    assert app.test_client().get('/?group=3').status_code==200
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
+        assert not db.execute('PRAGMA foreign_key_check').fetchall()
+        assert db.execute('SELECT album_id,title,kind,filename,visibility FROM media_files WHERE id=42').fetchone()==(aid,'Foto conservada','Fotografía','no-mover.jpg','internal')
+        assert db.execute('SELECT kind FROM media_files WHERE id=43').fetchone()[0]=='Afiche'
+        assert db.execute('SELECT password FROM users WHERE id=1').fetchone()[0]=='hash-sin-cambios'
+        assert json.loads(db.execute("SELECT data FROM records WHERE module='finance'").fetchone()[0])['amount']=='123.45'
+        assert db.execute("SELECT 1 FROM sqlite_master WHERE name='media_custom_title'").fetchone()
+        assert db.execute("SELECT 1 FROM site_settings WHERE key='retro-demo-v04'").fetchone()
+        counts=[db.execute('SELECT count(*) FROM '+table).fetchone()[0] for table in ['media_files','users','records']]
+    backups=list(tmp_path.glob('windows.sqlite.pre-utf8-*.bak'))
+    assert len(backups)==1
+    with sqlite3.connect(backups[0]) as db:
+        assert db.execute('SELECT kind FROM media_files WHERE id=42').fetchone()[0]==broken_kind
+        assert db.execute('SELECT count(*) FROM users').fetchone()[0]==1
+    create_app(config)
+    with sqlite3.connect(path) as db:
+        assert counts==[db.execute('SELECT count(*) FROM '+table).fetchone()[0] for table in ['media_files','users','records']]
+    assert len(list(tmp_path.glob('windows.sqlite.pre-utf8-*.bak')))==1
+
+
+def test_sql_files_always_read_as_utf8(tmp_path,monkeypatch):
+    original=Path.read_text
+    def checked(path,*args,**kwargs):
+        if path.suffix=='.sql':assert kwargs.get('encoding')=='utf-8'
+        return original(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'read_text',checked)
+    app=create_app(dict(TESTING=True,DATABASE=str(tmp_path/'fresh.sqlite'),UPLOAD_FOLDER=str(tmp_path/'uploads'),SECRET_KEY='test'))
+    runner=app.test_cli_runner()
+    assert runner.invoke(args=['init-db']).exit_code==0
+    assert runner.invoke(args=['seed-demo']).exit_code==0
+    create_app(dict(TESTING=True,DATABASE=app.config['DATABASE'],UPLOAD_FOLDER=app.config['UPLOAD_FOLDER'],SECRET_KEY='test'))

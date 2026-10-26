@@ -28,9 +28,9 @@ def create_app(test_config=None):
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     keyfile = Path(app.instance_path) / 'session.key'
     if not keyfile.exists():
-        keyfile.write_text(secrets.token_hex(32))
+        keyfile.write_text(secrets.token_hex(32),encoding='utf-8')
         keyfile.chmod(0o600)
-    app.config.from_mapping(SECRET_KEY=os.getenv('SECRET_KEY') or keyfile.read_text(), DATABASE=str(Path(app.instance_path)/'depec.sqlite'), UPLOAD_FOLDER=str(Path(app.instance_path)/'uploads'), MAX_CONTENT_LENGTH=10*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE')=='1', PERMANENT_SESSION_LIFETIME=timedelta(hours=8))
+    app.config.from_mapping(SECRET_KEY=os.getenv('SECRET_KEY') or keyfile.read_text(encoding='utf-8'), DATABASE=str(Path(app.instance_path)/'depec.sqlite'), UPLOAD_FOLDER=str(Path(app.instance_path)/'uploads'), MAX_CONTENT_LENGTH=10*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE')=='1', PERMANENT_SESSION_LIFETIME=timedelta(hours=8))
     if test_config:
         app.config.update(test_config)
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True,exist_ok=True)
@@ -489,7 +489,7 @@ def create_app(test_config=None):
 
     @app.cli.command('init-db')
     def init_db():
-        db().executescript((Path(__file__).parent/'schema.sql').read_text())
+        db().executescript((Path(__file__).parent/'schema.sql').read_text(encoding='utf-8'))
         db().execute("INSERT OR IGNORE INTO groups(id,name,kind,color,description) VALUES(1,'DEPEC','DEPEC','#d46a3b','Una comunidad, muchos caminos para servir.')")
         db().commit()
         upgrade_schema(db())

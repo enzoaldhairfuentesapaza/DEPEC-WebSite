@@ -1,6 +1,10 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.4.1 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.4.2 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Corrección v0.4.2 — inicio en Windows
+
+Lectura explícita en UTF-8 y reparación automática de la restricción de fotografías creada con codificación incorrecta. Conserva los datos y genera antes una copia de seguridad de la base afectada. Consulta `ACTUALIZAR_v0.4.2.md`.
 
 ## Novedades v0.4.1 — tablón de anuncios temporales
 
