@@ -43,3 +43,68 @@ if (groupFilters) {
     });
   });
 }
+
+// Menú móvil nativo: funciona incluso si JavaScript no carga.
+const nativeMenu = document.querySelector('.native-mobile-menu');
+if (nativeMenu) {
+  nativeMenu.querySelectorAll('nav a').forEach(link => link.addEventListener('click', () => { nativeMenu.open = false; }));
+  document.addEventListener('click', event => { if (!nativeMenu.contains(event.target)) nativeMenu.open = false; });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && nativeMenu.open) { nativeMenu.open = false; nativeMenu.querySelector('summary').focus(); }
+  });
+}
+// Carrusel de archivos. Sin avance automático para no interrumpir la lectura.
+document.querySelectorAll('[data-carousel]').forEach(carousel => {
+  const slides = [...carousel.querySelectorAll('[data-slide]')];
+  let position = 0;
+  const show = offset => {
+    if (!slides.length) return;
+    position = (position + offset + slides.length) % slides.length;
+    slides.forEach((slide,index) => { slide.hidden = index !== position; slide.classList.toggle('active',index === position); });
+    const counter = carousel.querySelector('[data-slide-counter]');
+    if (counter) counter.textContent = `${position + 1} / ${slides.length}`;
+  };
+  carousel.querySelector('[data-carousel-prev]')?.addEventListener('click', () => show(-1));
+  carousel.querySelector('[data-carousel-next]')?.addEventListener('click', () => show(1));
+});
+const eventGroup = document.querySelector('[data-event-group]');
+const eventLocation = document.querySelector('input[name="location"]');
+if (eventGroup && eventLocation) {
+  let previousDefault = '';
+  const setDefaultLocation = () => {
+    const address = eventGroup.selectedOptions[0]?.dataset.address || '';
+    if (!eventLocation.value || eventLocation.value === previousDefault) eventLocation.value = address;
+    previousDefault = address;
+  };
+  setDefaultLocation(); eventGroup.addEventListener('change', setDefaultLocation);
+}
+// El servidor devuelve la tarjeta autorizada. Los enlaces siguen funcionando sin JS.
+let calendarRequest;
+document.querySelectorAll('[data-calendar-event]').forEach(link => {
+  link.addEventListener('click', async event => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const detail = document.querySelector('#calendar-detail');
+    if (!detail) return;
+    event.preventDefault(); calendarRequest?.abort(); calendarRequest = new AbortController();
+    detail.setAttribute('aria-busy','true');
+    try {
+      const response = await fetch(link.href,{signal:calendarRequest.signal});
+      if (!response.ok) throw new Error('No disponible');
+      const page = new DOMParser().parseFromString(await response.text(),'text/html');
+      const updated = page.querySelector('#calendar-detail');
+      if (!updated) throw new Error('Sin detalle');
+      detail.replaceChildren(...updated.childNodes); detail.removeAttribute('aria-busy');
+      document.querySelectorAll('[data-calendar-event]').forEach(item => {
+        if (item.dataset.calendarEvent === link.dataset.calendarEvent) item.setAttribute('aria-current','true');
+        else item.removeAttribute('aria-current');
+      });
+      history.replaceState(null,'',link.href);
+      const description = detail.querySelector('.event-description');
+      if (description) description.open = true;
+      if (window.matchMedia('(max-width:900px)').matches) detail.scrollIntoView({behavior:'auto',block:'start'});
+      detail.focus({preventScroll:true});
+    } catch(error) {
+      if (error.name !== 'AbortError') window.location.assign(link.href);
+    }
+  });
+});

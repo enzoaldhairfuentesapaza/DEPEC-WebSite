@@ -1,0 +1,82 @@
+"""Migración aditiva y reglas de presentación compartidas."""
+import json
+from datetime import datetime
+from pathlib import Path
+from random import Random
+from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
+from PIL import Image, UnidentifiedImageError
+
+LIMA=ZoneInfo('America/Lima')
+
+def local_now():
+    return datetime.now(LIMA).replace(tzinfo=None)
+
+def upgrade_schema(connection):
+    if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='groups'").fetchone():
+        return
+    if connection.execute('PRAGMA user_version').fetchone()[0]<3:
+        connection.execute("UPDATE groups SET color='#bd123b' WHERE id=1 AND color='#d46a3b'")
+    names={r[1] for r in connection.execute('PRAGMA table_info(groups)')}
+    for name,definition in [('photo',"TEXT NOT NULL DEFAULT ''"),('maps_url',"TEXT NOT NULL DEFAULT ''")]:
+        if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
+    connection.executescript((Path(__file__).parent/'community_schema.sql').read_text())
+    # Incorpora adjuntos anteriores sin borrar ni mover los archivos originales.
+    upload_root=Path(connection.execute('PRAGMA database_list').fetchone()[2]).parent/'uploads'
+    for rid,module,gid,raw,uid,created in connection.execute("SELECT id,module,group_id,data,author_id,created FROM records WHERE module IN ('events','posts','gallery')").fetchall():
+        data=json.loads(raw)
+        if not data.get('attachment'):continue
+        prior=connection.execute('SELECT id,album_id FROM media_files WHERE record_id=?',(rid,)).fetchone()
+        aid=None
+        if module=='gallery':
+            title='Galería anterior · '+connection.execute('SELECT name FROM groups WHERE id=?',(gid,)).fetchone()[0]
+            album=connection.execute('SELECT id FROM albums WHERE group_id=? AND title=?',(gid,title)).fetchone()
+            aid=album[0] if album else connection.execute('INSERT INTO albums(group_id,title,description,created_by,created) VALUES(?,?,?,?,?)',(gid,title,'Fotografías conservadas de la versión anterior.',uid,created)).lastrowid
+        if prior:
+            if aid and not prior[1]:connection.execute('UPDATE media_files SET album_id=? WHERE id=?',(aid,prior[0]))
+            continue
+        width,height=int(data.get('image_width',1)),int(data.get('image_height',1))
+        try:
+            with Image.open(upload_root/data['attachment']) as im:width,height=im.size
+        except (OSError,ValueError):pass
+        connection.execute('INSERT INTO media_files(group_id,album_id,record_id,title,kind,filename,width,height,uploaded_by,visibility,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(gid,aid,rid,data['title'],data.get('media_kind') or ('Fotografía' if module=='gallery' else 'Afiche'),data['attachment'],width,height,uid,data.get('visibility','internal'),created))
+    connection.execute('PRAGMA user_version=3')
+    connection.commit()
+
+def picture_info(file):
+    try:
+        image=Image.open(file.stream)
+        if image.format not in ['PNG','JPEG'] or image.width*image.height>40_000_000:
+            raise ValueError('Usa una imagen PNG o JPEG de hasta 40 megapíxeles.')
+        width,height=image.size
+        if image.getexif().get(274,1) in [5,6,7,8]:width,height=height,width
+        file.stream.seek(0)
+        return width,height
+    except (UnidentifiedImageError,OSError,Image.DecompressionBombError) as exc:
+        file.stream.seek(0)
+        raise ValueError('La imagen no es válida.') from exc
+
+def event_presentation(data,group,at=None):
+    result=dict(data)
+    end=result.get('end_date') or result.get('date','')
+    if result.get('status')=='Cancelado':state='Cancelado'
+    elif result.get('status') in ['Realizado','Finalizado'] or end and end < (at or local_now()).isoformat(timespec='seconds'):state='Finalizado'
+    elif result.get('status')=='Reprogramado':state='Reprogramado'
+    elif result.get('date','') <= (at or local_now()).isoformat(timespec='seconds'):state='En curso'
+    else:state='Pronto'
+    result['display_status']=state
+    result['orientation']='landscape' if int(result.get('image_width',0))>int(result.get('image_height',0)) else 'portrait'
+    result['location']=result.get('location') or group['address'] or 'Lugar por confirmar'
+    address=result.get('event_address') or result.get('location') or group['address']
+    result['maps_link']='https://www.google.com/maps/search/?'+urlencode({'api':1,'query':address}) if address and 'por confirmar' not in address.lower() and 'ejemplo' not in address.lower() else ''
+    if result.get('event_address','') in ['',group['address']] and result['location']==group['address'] and group['maps_url']:
+        result['maps_link']=group['maps_url']
+    return result
+
+# Textos breves de Reina-Valera 1909 (dominio público), sin servicio externo.
+VERSES=[('Salmos 133:1','¡Mirad cuán bueno y cuán delicioso es habitar los hermanos igualmente en uno!'),('Filipenses 4:13','Todo lo puedo en Cristo que me fortalece.'),('1 Juan 4:19','Nosotros le amamos á él, porque él nos amó primero.'),('Salmos 119:105','Lámpara es á mis pies tu palabra, y lumbrera á mi camino.'),('1 Corintios 16:14','Todas vuestras cosas sean hechas con caridad.'),('Romanos 12:21','No seas vencido de lo malo; mas vence con el bien el mal.'),('1 Tesalonicenses 5:16','Estad siempre gozosos.'),('1 Tesalonicenses 5:17','Orad sin cesar.'),('Salmos 23:1','Jehová es mi pastor; nada me faltará.'),('Salmos 46:1','Dios es nuestro amparo y fortaleza, nuestro pronto auxilio en las tribulaciones.'),('Proverbios 17:17','En todo tiempo ama el amigo; y el hermano para la angustia es nacido.'),('Mateo 5:9','Bienaventurados los pacificadores: porque ellos serán llamados hijos de Dios.'),('Romanos 12:12','Gozosos en la esperanza; sufridos en la tribulación; constantes en la oración.'),('Salmos 150:6','Todo lo que respira alabe á JAH. Aleluya.'),('1 Juan 4:8','El que no ama, no conoce á Dios; porque Dios es amor.')]
+VERSE_ORDER=list(range(len(VERSES)));Random('DEPEC-Arequipa').shuffle(VERSE_ORDER)
+def daily_verse(day=None):
+    day=day or local_now().date()
+    ref,text=VERSES[VERSE_ORDER[day.toordinal()%len(VERSE_ORDER)]]
+    return dict(reference=ref,text=text,date=day.isoformat(),version='Reina-Valera 1909')

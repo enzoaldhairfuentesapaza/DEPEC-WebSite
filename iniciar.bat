@@ -5,10 +5,10 @@ if not exist ".venv\Scripts\python.exe" (
   py -3 -m venv .venv
   if errorlevel 1 goto error
 )
-if not exist ".venv\depec-ready" (
+if not exist ".venv\depec-ready-v03" (
   ".venv\Scripts\python.exe" -m pip install -r requirements.txt
   if errorlevel 1 goto error
-  echo listo>".venv\depec-ready"
+  echo listo>".venv\depec-ready-v03"
 )
 if not exist "instance\depec.sqlite" (
   ".venv\Scripts\python.exe" -m flask --app run init-db

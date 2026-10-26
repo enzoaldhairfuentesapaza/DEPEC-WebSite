@@ -17,6 +17,8 @@ from flask import Flask, abort, flash, g, redirect, render_template, request, se
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from .modules import MODULES, ROLES
+from .community_data import upgrade_schema, local_now, event_presentation, picture_info
+from .community import register_community
 
 
 def create_app(test_config=None):
@@ -30,6 +32,8 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True,exist_ok=True)
+    if Path(app.config['DATABASE']).exists():
+        with sqlite3.connect(app.config['DATABASE']) as connection: upgrade_schema(connection)
 
     def db():
         if 'db' not in g:
@@ -45,7 +49,7 @@ def create_app(test_config=None):
             connection.close()
 
     def now():
-        return datetime.now().isoformat(timespec='seconds')
+        return local_now().isoformat(timespec='seconds')
 
     def audit(action, group_id=None):
         db().execute('INSERT INTO audit(user_id,group_id,action,created) VALUES(?,?,?,?)',(g.user['id'],group_id,action,now()))
@@ -65,9 +69,9 @@ def create_app(test_config=None):
         roles=roles_for(group_id)
         if not roles:
             return False
-        if {'Presidente','Vicepresidente'} & roles:
+        if {'Presidente','Vicepresidente','Líder'} & roles:
             return True
-        if module=='finance':
+        if module in ['finance']:
             return bool({'Tesorero','Protesorero'} & roles)
         if module in {'members','documents','requests'}:
             return bool({'Secretario','Prosecretario'} & roles)
@@ -80,6 +84,9 @@ def create_app(test_config=None):
         result=[]
         for row in rows:
             item=dict(row); item['d']=json.loads(row['data'])
+            if module=='events':
+                gr=db().execute('SELECT * FROM groups WHERE id=?',(item['group_id'],)).fetchone()
+                item['d']=event_presentation(item['d'],gr)
             if scope and item['group_id']!=scope:
                 continue
             if public:
@@ -103,12 +110,23 @@ def create_app(test_config=None):
         def wrapped(*args,**kwargs):
             if not g.user:
                 return redirect(url_for('login'))
+            if not community['is_leader']() and db().execute('SELECT 1 FROM memberships WHERE user_id=?',(g.user['id'],)).fetchone() and request.endpoint not in ['dashboard','account','community.member_home']:
+                abort(403)
             return fn(*args,**kwargs)
         return wrapped
 
     @app.before_request
     def before():
         g.user=db().execute('SELECT * FROM users WHERE id=? AND active=1',(session.get('uid'),)).fetchone() if session.get('uid') else None
+        if request.endpoint!='static':
+            completed=False
+            for row in db().execute("SELECT id,data FROM records WHERE module='events'").fetchall():
+                data=json.loads(row['data'])
+                if data.get('status') not in ['Cancelado','Finalizado'] and data.get('end_date') and data['end_date']<now():
+                    data['previous_status']=data.get('status'); data['status']='Finalizado'
+                    db().execute('UPDATE records SET data=?,updated=? WHERE id=?',(json.dumps(data),now(),row['id']))
+                    db().execute('INSERT INTO audit(action,created,group_id) SELECT ?,?,group_id FROM records WHERE id=?',('Sistema: finalizó evento #'+str(row['id']),now(),row['id']));completed=True
+            if completed:db().commit()
         if 'csrf' not in session:
             session['csrf']=secrets.token_urlsafe(32)
         if request.method=='POST' and not secrets.compare_digest(session['csrf'],request.form.get('csrf','')):
@@ -128,13 +146,20 @@ def create_app(test_config=None):
     def context():
         groups=db().execute('SELECT * FROM groups ORDER BY id').fetchall()
         demo_mode=db().execute("SELECT 1 FROM users WHERE email='admin@depec.demo'").fetchone() is not None
-        return dict(demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=date.today().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
+        scope=request.args.get('group',type=int) or 1
+        if request.endpoint=='community.album':
+            album=db().execute('SELECT group_id FROM albums WHERE id=?',((request.view_args or {}).get('album_id'),)).fetchone()
+            if album:scope=album['group_id']
+        brand_group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
+        return dict(brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
 
     @app.route('/')
     def public():
         scope=request.args.get('group',type=int)
         selected=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone() if scope else None
-        return render_template('public.html',selected=selected,events=sorted(records('events',scope,True),key=lambda r:r['d'].get('date','')),posts=records('posts',scope,True),gallery=records('gallery',scope,True),public_page=True)
+        if scope and not selected:abort(404)
+        active_scope=scope or 1
+        return render_template('public.html',selected=selected if active_scope!=1 else None,events=sorted(records('events',scope,True),key=lambda r:r['d'].get('date','')),posts=records('posts',scope,True),gallery=records('gallery',scope,True),public_page=True,**community['public_context'](active_scope))
 
     @app.route('/login',methods=['GET','POST'])
     def login():
@@ -161,6 +186,7 @@ def create_app(test_config=None):
     @app.get('/panel')
     @logged
     def dashboard():
+        if not community['is_leader']() and db().execute("SELECT 1 FROM memberships WHERE user_id=? AND status='Aprobado'",(g.user['id'],)).fetchone():return redirect(url_for('community.member_home'))
         scope=request.args.get('group',type=int)
         members=records('members',scope); events=records('events',scope)
         money=records('finance',scope)
@@ -174,7 +200,7 @@ def create_app(test_config=None):
         public_mode=not g.user or request.args.get('public')=='1'
         scope=request.args.get('group',type=int)
         try:
-            first=date.fromisoformat(request.args.get('month',date.today().strftime('%Y-%m')+'-01')) .replace(day=1)
+            first=date.fromisoformat(request.args.get('month',local_now().strftime('%Y-%m')+'-01')) .replace(day=1)
         except ValueError:
             abort(400)
         events=records('events',scope,public_mode)
@@ -182,7 +208,12 @@ def create_app(test_config=None):
         previous=(first-timedelta(days=1)).replace(day=1).isoformat()
         following=(first+timedelta(days=32)).replace(day=1).isoformat()
         names=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
-        return render_template('calendar.html',events=events,weeks=weeks,first=first,previous=previous,following=following,month_name=names[first.month-1],public_page=public_mode)
+        selected_event=None
+        event_id=request.args.get('event',type=int)
+        if event_id:
+            selected_event=next((ev for ev in events if ev['id']==event_id),None)
+            if not selected_event:abort(404)
+        return render_template('calendar.html',selected_event=selected_event,events=events,weeks=weeks,first=first,previous=previous,following=following,month_name=names[first.month-1],public_page=public_mode)
 
     @app.get('/birthdays')
     @logged
@@ -212,7 +243,7 @@ def create_app(test_config=None):
             value=request.form.get(key,'').strip()
             if field['required'] and not value: raise ValueError('Completa '+field['label']+'.')
             if len(value)>12000: raise ValueError('Texto demasiado largo.')
-            if kind=='select' and value not in field['options']: raise ValueError('Opción inválida.')
+            if kind=='select' and value and value not in field['options']: raise ValueError('Opción inválida.')
             if value and kind in ['date','datetime-local']:
                 datetime.fromisoformat(value)
             if value and kind=='money':
@@ -227,6 +258,11 @@ def create_app(test_config=None):
                 target=get_record(int(value))
                 if target['module']!='events' or target['group_id']!=group_id: raise ValueError('El evento debe pertenecer al mismo grupo.')
             data[key]=value
+        if module=='events':
+            group=db().execute('SELECT * FROM groups WHERE id=?',(group_id,)).fetchone()
+            if not data.get('location'):data['location']=group['address']
+            if not data.get('event_address'):data['event_address']=data.get('location') or group['address']
+            data['media_kind']=data.get('media_kind') or 'Afiche'
         if module=='events' and data['end_date']<data['date']: raise ValueError('La finalización debe ser posterior al inicio.')
         if module=='members' and data['date']>date.today().isoformat(): raise ValueError('La fecha de nacimiento no puede ser futura.')
         file=request.files.get('attachment')
@@ -239,6 +275,8 @@ def create_app(test_config=None):
                 header=file.stream.read(12); file.stream.seek(0)
                 ext=filename.rsplit('.',1)[-1].lower()
                 if not ((ext=='png' and header.startswith(b'\x89PNG\r\n\x1a\n')) or (ext in ['jpg','jpeg'] and header.startswith(b'\xff\xd8\xff'))): raise ValueError('Imagen inválida.')
+            if module in ['gallery','events','posts']:
+                data['image_width'],data['image_height']=picture_info(file)
             storage=uuid4().hex+'_'+filename
             file.save(Path(app.config['UPLOAD_FOLDER'])/storage)
             data['attachment']=storage
@@ -270,6 +308,14 @@ def create_app(test_config=None):
                 else:
                     cursor=db().execute('INSERT INTO records(module,group_id,data,author_id,created,updated) VALUES(?,?,?,?,?,?)',(module,group_id,json.dumps(data),g.user['id'],now(),now()))
                     record_id=cursor.lastrowid
+                if data.get('attachment') and module in ['events','posts','gallery']:
+                    kind=data.get('media_kind') or ('Fotografía' if module=='gallery' else 'Afiche')
+                    visibility='public' if data.get('visibility')=='public' and (module=='events' or data.get('status')=='Publicado') else 'internal'
+                    prior=db().execute('SELECT id,filename FROM media_files WHERE record_id=?',(record_id,)).fetchone()
+                    if prior:
+                        db().execute('UPDATE media_files SET title=?,kind=?,filename=?,width=?,height=?,visibility=? WHERE id=?',(data['title'],kind,data['attachment'],int(data.get('image_width',1)),int(data.get('image_height',1)),visibility,prior['id']))
+                        if prior['filename']!=data['attachment']:db().execute('UPDATE media_files SET uploaded_by=?,created=? WHERE id=?',(g.user['id'],now(),prior['id']))
+                    else:db().execute('INSERT INTO media_files(group_id,record_id,title,kind,filename,width,height,uploaded_by,visibility,created) VALUES(?,?,?,?,?,?,?,?,?,?)',(group_id,record_id,data['title'],kind,data['attachment'],int(data.get('image_width',1)),int(data.get('image_height',1)),g.user['id'],visibility,now()))
                 audit(f'{"Actualizó" if item else "Creó"} {MODULES[module]["singular"]} #{record_id}: {data["title"]}',group_id)
                 db().commit(); flash('Guardado correctamente.','success')
                 return redirect(url_for('listing',module=module,group=group_id))
@@ -283,6 +329,7 @@ def create_app(test_config=None):
     def delete(record_id):
         item=get_record(record_id)
         if not allowed(item['group_id'],item['module'],True): abort(403)
+        db().execute('DELETE FROM media_files WHERE record_id=?',(record_id,))
         db().execute('DELETE FROM records WHERE id=?',(record_id,))
         audit(f'Eliminó {item["module"]} #{record_id}',item['group_id']); db().commit()
         if item['d'].get('attachment'):
@@ -355,7 +402,7 @@ def create_app(test_config=None):
                 flash('Verifica la contraseña actual. La nueva debe tener al menos 12 caracteres.','error')
             else:
                 db().execute('UPDATE users SET password=? WHERE id=?',(generate_password_hash(new),g.user['id'])); audit('Cambió su contraseña'); db().commit(); flash('Contraseña actualizada.','success')
-        return render_template('account.html')
+        return render_template('account.html',public_page=not community['is_leader']())
 
     @app.route('/organization',methods=['GET','POST'])
     @logged
@@ -436,7 +483,12 @@ def create_app(test_config=None):
         db().executescript((Path(__file__).parent/'schema.sql').read_text())
         db().execute("INSERT OR IGNORE INTO groups(id,name,kind,color,description) VALUES(1,'DEPEC','DEPEC','#d46a3b','Una comunidad, muchos caminos para servir.')")
         db().commit()
+        upgrade_schema(db())
         click.echo('Base de datos inicializada.')
+
+    @app.cli.command('upgrade-db')
+    def upgrade_db():
+        upgrade_schema(db());click.echo('Esquema actualizado sin eliminar registros.')
 
     @app.cli.command('seed-demo')
     def seed_demo():
@@ -451,4 +503,5 @@ def create_app(test_config=None):
         if len(password)<12: raise click.ClickException('Usa 12 caracteres como mínimo.')
         db().execute('INSERT INTO users(name,email,password,admin) VALUES(?,?,?,1)',(name,email.lower(),generate_password_hash(password))); db().commit(); click.echo('Administrador creado.')
 
+    community=register_community(app,dict(db=db,allowed=allowed,logged=logged,audit=audit,now=now,roles_for=roles_for,get_record=get_record))
     return app

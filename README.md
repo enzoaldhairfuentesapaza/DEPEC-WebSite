@@ -1,6 +1,12 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.2 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.3 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Novedades v0.3
+
+Diseño rojo/borgoña inspirado en el logo DEPEC, fotografía real de SEC Jerusalén, hero con los últimos archivos de la organización, distinción afiche/fotografía, versículo diario local, collage de eventos y calendario con tarjeta lateral. Páginas por iglesia con su color, dirección y Google Maps; registro de miembros sujeto a aprobación y mensajes moderados; álbumes con contribuciones de líderes y perfiles públicos de la directiva.
+
+La migración es aditiva y se ejecuta al abrir una base existente. Antes de actualizar, realiza una copia. Las nuevas dependencias se instalan desde requirements. Lee `ACTUALIZAR_v0.3.md` para los pasos, permisos y limitaciones.
 
 ## Novedades visuales de la versión 0.2
 

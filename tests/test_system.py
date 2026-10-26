@@ -181,14 +181,15 @@ def test_additional_permission_can_be_granted_and_revoked(client,app):
 
 def test_gallery_public_visibility_and_fake_image_rejected(client,app):
     import base64
-    png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=')
+    from PIL import Image
+    buffer=io.BytesIO(); Image.new('RGB',(100,160),'red').save(buffer,format='PNG'); png=buffer.getvalue()
     csrf=login(client)
     data=dict(csrf=csrf,group_id=2,title='Recuerdo público',body='Galería de prueba',date=date.today().isoformat(),visibility='public',status='Publicado',attachment=(io.BytesIO(png),'foto.png'))
     assert client.post('/manage/gallery/new',data=data).status_code==302
     with sqlite3.connect(app.config['DATABASE']) as db:
         rid=db.execute('SELECT max(id) FROM records').fetchone()[0]
     client.post('/logout',data={'csrf':csrf})
-    assert 'Recuerdo público' in client.get('/').get_data(as_text=True)
+    assert 'Recuerdo público' not in client.get('/').get_data(as_text=True)  # Hero DEPEC no incluye archivos de otra iglesia
     assert client.get(f'/media/{rid}').status_code==200
     csrf=login(client)
     data.update(csrf=csrf,visibility='internal',attachment=(io.BytesIO(png),'foto.png'))
@@ -208,3 +209,141 @@ def test_clean_install_cli_bootstrap(tmp_path):
         assert db.execute('SELECT count(*) FROM groups').fetchone()[0]==7
         assert db.execute('SELECT name FROM groups WHERE id=1').fetchone()[0]=='DEPEC'
     assert runner.invoke(args=['seed-demo']).exit_code!=0
+
+# v0.3: reglas de comunidad, archivos, membresía y presentación.
+def image_upload(width=180,height=260,name='imagen.png'):
+    from PIL import Image
+    content=io.BytesIO();Image.new('RGB',(width,height),'#bd123b').save(content,format='PNG');content.seek(0)
+    return content,name
+
+def create_album(client,csrf,gid=1,title='Álbum de prueba',visibility='public'):
+    return client.post('/panel/archivos',data=dict(csrf=csrf,action='album',group_id=gid,title=title,description='Fotos del encuentro',visibility=visibility))
+
+def test_community_pages_and_logo(client,app):
+    for path in ['/','/?group=5','/solicitar-registro','/iglesia/5/foto','/static/community.css','/static/images/depec-logo.jpg','/iglesia/2/foto']:
+        assert client.get(path).status_code==200,path
+    body=client.get('/').get_data(as_text=True)
+    assert 'Arequipa sureste' in body and 'daily-verse' in body and 'native-mobile-menu' in body
+    assert 'images/jerusalen.jpg' not in body # imagen real va por ruta de iglesia
+    login(client)
+    for path in ['/panel/archivos','/panel/directiva','/panel/identidad','/panel/aprobaciones']:
+        assert client.get(path).status_code==200,path
+
+def test_hero_uses_only_organization_files_and_preserves_kind(client,app):
+    csrf=login(client)
+    for gid,title,kind in [(2,'EXCLUSIVO DE ISRAEL','Fotografía'),(1,'AFICHE DE DEPEC','Afiche'),(1,'FOTO DE DEPEC','Fotografía')]:
+        data=dict(csrf=csrf,action='upload',group_id=gid,title=title,kind=kind,visibility='public',photos=image_upload())
+        assert client.post('/panel/archivos',data=data).status_code==302
+    body=client.get('/').get_data(as_text=True)
+    assert 'AFICHE DE DEPEC' in body and 'FOTO DE DEPEC' in body
+    assert 'EXCLUSIVO DE ISRAEL' not in body
+    own=client.get('/?group=2').get_data(as_text=True)
+    assert 'EXCLUSIVO DE ISRAEL' in own and 'AFICHE DE DEPEC' not in own
+
+def test_album_contributors_scopes_and_metadata(client,app):
+    csrf=login(client);create_album(client,csrf,1,'Global');create_album(client,csrf,3,'Jorge')
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        aid=db.execute("SELECT id FROM albums WHERE title='Global'").fetchone()[0]
+        foreign=db.execute("SELECT id FROM albums WHERE title='Jorge'").fetchone()[0]
+    client.post('/logout',data={'csrf':csrf});csrf=login(client,'israel@depec.demo')
+    data=dict(csrf=csrf,action='upload',group_id=2,album_id=aid,title='Servicio juntos',kind='Fotografía',visibility='public',photos=image_upload())
+    assert client.post('/panel/archivos',data=data).status_code==302
+    body=client.get(f'/album/{aid}').get_data(as_text=True)
+    assert 'Presidencia Israel' in body and 'SEC Israel' in body and 'Servicio juntos' in body and 'ID #' in body
+    data.update(album_id=foreign,photos=image_upload())
+    assert client.post('/panel/archivos',data=data).status_code==403
+    data.update(album_id=aid,group_id=3,photos=image_upload())
+    assert client.post('/panel/archivos',data=data).status_code==403
+
+def test_member_registration_moderation_and_no_privilege_escalation(client,app):
+    csrf=token(client)
+    assert 'Solicitud enviada' in client.post('/solicitar-registro',data=dict(csrf=csrf,name='Miembro de prueba',email='persona@example.com',password='ClaveMiembro2026!',group_id=2)).get_data(as_text=True)
+    # No puede iniciar sesión pendiente de aprobación.
+    assert client.post('/login',data=dict(csrf=token(client),email='persona@example.com',password='ClaveMiembro2026!')).status_code==200
+    csrf=login(client,'israel@depec.demo')
+    with sqlite3.connect(app.config['DATABASE']) as db:mid=db.execute("SELECT id FROM memberships ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert client.post('/panel/aprobaciones',data=dict(csrf=csrf,action='membership',id=mid,decision='Aprobado')).status_code==302
+    client.post('/logout',data={'csrf':csrf})
+    assert client.post('/login',data=dict(csrf=token(client),email='persona@example.com',password='ClaveMiembro2026!')).status_code==302
+    assert client.get('/panel').location.endswith('/mi-comunidad')
+    assert client.get('/manage/members').status_code==403
+    with client.session_transaction() as session:csrf=session['csrf']
+    message='Encontré una comunidad que me ayuda a crecer.'
+    assert client.post('/mi-comunidad',data=dict(csrf=csrf,body=message)).status_code==302
+    assert message not in client.get('/').get_data(as_text=True)
+    with sqlite3.connect(app.config['DATABASE']) as db:message_id=db.execute('SELECT max(id) FROM community_messages').fetchone()[0]
+    client.post('/logout',data={'csrf':csrf});csrf=login(client,'israel@depec.demo')
+    assert client.post('/panel/aprobaciones',data=dict(csrf=csrf,action='message',id=message_id,decision='Aprobado')).status_code==302
+    assert message in client.get('/').get_data(as_text=True)
+    assert message not in client.get('/?group=3').get_data(as_text=True)
+
+def test_foreign_church_cannot_approve_members(client,app):
+    csrf=token(client);client.post('/solicitar-registro',data=dict(csrf=csrf,name='Otra persona',email='otra@example.com',password='OtraClave123456!',group_id=3))
+    with sqlite3.connect(app.config['DATABASE']) as db:mid=db.execute('SELECT max(id) FROM memberships').fetchone()[0]
+    csrf=login(client,'israel@depec.demo')
+    assert client.post('/panel/aprobaciones',data=dict(csrf=csrf,action='membership',id=mid,decision='Aprobado')).status_code==403
+
+def test_event_defaults_maps_orientation_and_automatic_completion(client,app):
+    from app.community_data import local_now
+    csrf=login(client)
+    address='Dirección de prueba 123, Arequipa'
+    assert client.post('/panel/identidad',data=dict(csrf=csrf,group_id=2,color='#265ba1',description='Comunidad',church='Israel',address=address,maps_url='https://maps.app.goo.gl/ejemplo',schedule='Sábados')).status_code==302
+    data=payload();data.update(csrf=csrf,location='',date=(local_now()+timedelta(days=2)).isoformat(timespec='minutes'),end_date=(local_now()+timedelta(days=2,hours=3)).isoformat(timespec='minutes'),attachment=image_upload(400,180),media_kind='Afiche')
+    assert client.post('/manage/events/new',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        rid,raw=db.execute("SELECT id,data FROM records WHERE module='events' ORDER BY id DESC LIMIT 1").fetchone()
+        saved=json.loads(raw);assert saved['location']==address and saved['image_width']==400
+    result=client.get(f'/calendar?public=1&event={rid}').get_data(as_text=True)
+    assert 'calendar-detail' in result and 'y-event landscape' in result and 'https://maps.app.goo.gl/ejemplo' in result and 'Pronto' in result
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        saved['end_date']=(local_now()-timedelta(hours=1)).isoformat(timespec='minutes');saved['date']=(local_now()-timedelta(hours=3)).isoformat(timespec='minutes')
+        db.execute('UPDATE records SET data=? WHERE id=?',(json.dumps(saved),rid))
+    client.get('/')
+    with sqlite3.connect(app.config['DATABASE']) as db:assert json.loads(db.execute('SELECT data FROM records WHERE id=?',(rid,)).fetchone()[0])['status']=='Finalizado'
+
+def test_verse_changes_daily_and_stays_stable():
+    from app.community_data import daily_verse
+    a=date(2026,10,26)
+    assert daily_verse(a)==daily_verse(a)
+    assert daily_verse(a)['reference']!=daily_verse(a+timedelta(days=1))['reference']
+
+def test_leader_profile_publication_and_local_theme(client,app):
+    csrf=login(client,'israel@depec.demo')
+    data=dict(csrf=csrf,user_id=2,group_id=2,message='Aquí seguimos creciendo juntos.',phone='+51999000111',published='1',photo=image_upload())
+    assert client.post('/panel/directiva',data=data).status_code==302
+    body=client.get('/?group=2').get_data(as_text=True)
+    assert 'Aquí seguimos creciendo juntos.' in body and 'tel:+51999000111' in body
+    assert 'Aquí seguimos creciendo juntos.' not in client.get('/').get_data(as_text=True)
+    assert client.get('/directiva/2/2/foto').status_code==200
+    data.update(user_id=5,group_id=1,photo=image_upload())
+    assert client.post('/panel/directiva',data=data).status_code==403
+
+def test_unsafe_maps_link_rejected(client,app):
+    csrf=login(client)
+    response=client.post('/panel/identidad',data=dict(csrf=csrf,group_id=2,color='#265ba1',description='Prueba',address='Dirección',maps_url='javascript:alert(1)'))
+    assert 'Usa un enlace HTTPS de Google Maps' in response.get_data(as_text=True)
+
+def test_upgrade_from_v02_preserves_data_and_is_idempotent(tmp_path):
+    from app.community_data import upgrade_schema
+    path=tmp_path/'old.sqlite'
+    old_schema=(Path(__file__).parents[1]/'app'/'schema.sql').read_text().split('CREATE TABLE IF NOT EXISTS albums')[0].replace(",photo TEXT NOT NULL DEFAULT '',maps_url TEXT NOT NULL DEFAULT ''",'')
+    with sqlite3.connect(path) as db:
+        db.executescript(old_schema)
+        db.execute("INSERT INTO groups(id,name,kind,color) VALUES(1,'DEPEC','DEPEC','#bd123b')")
+        db.execute("INSERT INTO users(id,name,email,password) VALUES(1,'Nombre conservado','guardado@example.com','hash')")
+        db.execute("INSERT INTO records(module,group_id,data,author_id,created,updated) VALUES('tasks',1,?,1,'2026-01-01','2026-01-01')",(json.dumps(dict(title='No borrar esta tarea')),))
+        db.commit();upgrade_schema(db);upgrade_schema(db)
+        assert db.execute('SELECT name FROM users WHERE id=1').fetchone()[0]=='Nombre conservado'
+        assert json.loads(db.execute('SELECT data FROM records').fetchone()[0])['title']=='No borrar esta tarea'
+        assert 'maps_url' in [r[1] for r in db.execute('PRAGMA table_info(groups)')]
+        assert db.execute('PRAGMA user_version').fetchone()[0]==3
+        assert db.execute('SELECT count(*) FROM media_files').fetchone()[0]==0
+
+def test_private_album_is_not_exposed_to_foreign_church(client,app):
+    csrf=login(client);create_album(client,csrf,3,'Álbum reservado','internal')
+    with sqlite3.connect(app.config['DATABASE']) as db:aid=db.execute("SELECT id FROM albums WHERE title='Álbum reservado'").fetchone()[0]
+    assert client.get(f'/album/{aid}').status_code==200
+    client.post('/logout',data={'csrf':csrf})
+    assert client.get(f'/album/{aid}').status_code==403
+    login(client,'israel@depec.demo')
+    assert client.get(f'/album/{aid}').status_code==403

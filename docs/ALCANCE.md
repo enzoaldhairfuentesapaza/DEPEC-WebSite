@@ -50,3 +50,7 @@ No cargar padrones reales ni utilizar saldos del prototipo como contabilidad ofi
 ## Actualización de diseño v0.2
 
 Se incorpora portada editorial, imágenes generadas identificadas como referencia, menú público adaptable, accesos rápidos, tarjetas de eventos, filtros SEC/GJ, información por grupo, galería de ejemplo y preguntas frecuentes. Los cambios se describen en `ACTUALIZAR_v0.2.md`; las ampliaciones funcionales pendientes de la tabla anterior mantienen su estado.
+
+## Actualización v0.3 — reemplaza los estados anteriores de estas funciones
+
+Se implementan identidad basada en el logo DEPEC y fotografía de Jerusalén, configuración del local y color por iglesia, hero con archivos propios clasificados, versículo diario local, collage de eventos por orientación, estado Finalizado automático al consultar, enlaces Maps y tarjeta lateral del calendario. También se añaden registro y aprobación de miembros, mensajes moderados, álbumes con contribuciones por alcance y metadatos de autor/iglesia/álbum, y perfiles públicos autorizados de directiva. La migración es aditiva y conserva el contenido anterior. Detalles y límites en `ACTUALIZAR_v0.3.md`.
