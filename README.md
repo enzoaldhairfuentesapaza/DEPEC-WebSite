@@ -1,6 +1,10 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.4.2 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.4.3 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Novedades v0.4.3 — tarjetas con formato y vista previa
+
+El collage respeta la orientación de cada evento y ocupa menos ancho. El formulario permite formato automático, vertical u horizontal; imagen propia, solo información o tres imágenes genéricas; y vista previa en vivo. Directiva compacta con pines por cargo, tipografía más equilibrada y mapa del local configurable por iglesia. Consulta `ACTUALIZAR_v0.4.3.md`.
 
 ## Corrección v0.4.2 — inicio en Windows
 

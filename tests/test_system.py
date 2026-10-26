@@ -547,3 +547,82 @@ def test_sql_files_always_read_as_utf8(tmp_path,monkeypatch):
     assert runner.invoke(args=['init-db']).exit_code==0
     assert runner.invoke(args=['seed-demo']).exit_code==0
     create_app(dict(TESTING=True,DATABASE=app.config['DATABASE'],UPLOAD_FOLDER=app.config['UPLOAD_FOLDER'],SECRET_KEY='test'))
+
+@pytest.mark.parametrize('width,height,layout,expected',[(300,700,'Automático','portrait'),(900,350,'Automático','landscape'),(300,700,'Horizontal','landscape'),(900,350,'Vertical','portrait')])
+def test_event_card_orientation_and_override(width,height,layout,expected):
+    from app.community_data import event_presentation
+    group=dict(address='Local',maps_url='')
+    data=dict(date='2030-01-01T18:00',end_date='2030-01-01T20:00',attachment='imagen.jpg',image_width=width,image_height=height,card_layout=layout)
+    result=event_presentation(data,group)
+    assert result['orientation']==expected and result['has_image'] and result['image_source']=='upload'
+
+
+def test_event_image_modes_preserve_original_and_preview(client,app):
+    from app.community_data import local_now
+    csrf=login(client)
+    data=payload();data.update(csrf=csrf,date=(local_now()+timedelta(days=1)).isoformat(timespec='minutes'),end_date=(local_now()+timedelta(days=1,hours=2)).isoformat(timespec='minutes'),attachment=image_upload(220,600),media_kind='Afiche',card_layout='Automático',image_mode='Imagen propia',generic_image='Encuentro')
+    assert client.post('/manage/events/new',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        rid,raw=db.execute("SELECT id,data FROM records WHERE module='events' ORDER BY id DESC LIMIT 1").fetchone()
+        original=json.loads(raw)['attachment']
+        media_id=db.execute('SELECT id FROM media_files WHERE record_id=?',(rid,)).fetchone()[0]
+    assert app.test_client().get(f'/archivos/{media_id}').status_code==200
+    edit=client.get(f'/manage/events/{rid}/edit').get_data(as_text=True)
+    assert 'data-preview-card' in edit and 'data-event-editor' in edit and 'event-preview.js' in edit
+    assert 'Imagen genérica' in edit and 'Sin imagen' in edit and 'Automático' in edit
+    data.pop('attachment');data['image_mode']='Sin imagen'
+    assert client.post(f'/manage/events/{rid}/edit',data=data).status_code==302
+    page=client.get(f'/calendar?public=1&event={rid}').get_data(as_text=True)
+    from html.parser import HTMLParser
+    class SelectedCard(HTMLParser):
+        def __init__(self):super().__init__();self.inside=False;self.images=[];self.classes=''
+        def handle_starttag(self,tag,attrs):
+            attrs=dict(attrs)
+            if tag=='article' and 'y-event' in attrs.get('class',''):self.inside=True;self.classes=attrs.get('class','')
+            if self.inside and tag=='img':self.images.append(attrs.get('src'))
+        def handle_endtag(self,tag):
+            if tag=='article':self.inside=False
+    result=SelectedCard();result.feed(page)
+    assert 'text-only' in result.classes and 'landscape' in result.classes and not result.images
+    assert app.test_client().get(f'/archivos/{media_id}').status_code==403
+    assert Path(app.config['UPLOAD_FOLDER'],original).exists()
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert json.loads(db.execute('SELECT data FROM records WHERE id=?',(rid,)).fetchone()[0])['attachment']==original
+    data.update(image_mode='Imagen genérica',generic_image='Comunidad')
+    assert client.post(f'/manage/events/{rid}/edit',data=data).status_code==302
+    result=SelectedCard();result.feed(client.get(f'/calendar?public=1&event={rid}').get_data(as_text=True))
+    assert 'landscape' in result.classes and result.images==['/static/images/event-comunidad.svg']
+    data['card_layout']='Vertical'
+    assert client.post(f'/manage/events/{rid}/edit',data=data).status_code==302
+    result=SelectedCard();result.feed(client.get(f'/calendar?public=1&event={rid}').get_data(as_text=True))
+    assert 'portrait' in result.classes
+
+
+def test_exact_map_configuration_and_validation(client,app):
+    from app.community_data import normalize_map_embed
+    url='https://www.google.com/maps/embed?pb=!1m18!2m3!3d100'
+    assert normalize_map_embed('<iframe src="'+url+'" width="600"></iframe>')==url
+    for invalid in ['https://evil.example/maps/embed?pb=a','javascript:alert(1)','https://www.google.com.evil.example/maps/embed?pb=a','https://maps.app.goo.gl/ejemplo','https://user@www.google.com/maps/embed?pb=a']:
+        with pytest.raises(ValueError):normalize_map_embed(invalid)
+    csrf=login(client,'israel@depec.demo')
+    data=dict(csrf=csrf,group_id=2,color='#3453d1',maps_url='https://maps.app.goo.gl/exacto',maps_embed_url='<iframe src="'+url+'"></iframe>',address='Local por confirmar')
+    assert client.post('/panel/identidad',data=data).status_code==302
+    page=client.get('/?group=2').get_data(as_text=True)
+    assert 'src="'+url+'"' in page and 'Ubicación de SEC Israel' in page
+    assert 'src="'+url+'"' not in client.get('/?group=3').get_data(as_text=True)
+    data['group_id']=3
+    assert client.post('/panel/identidad',data=data).status_code==403
+    data.update(group_id=2,maps_embed_url='https://evil.example/embed')
+    assert 'Insertar un mapa' in client.post('/panel/identidad',data=data).get_data(as_text=True)
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT maps_embed_url FROM groups WHERE id=2').fetchone()[0]==url
+
+
+def test_map_column_upgrade_preserves_existing_identity(tmp_path):
+    from app.community_data import upgrade_schema
+    path=tmp_path/'prior.sqlite'
+    schema=(Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8').replace(",maps_embed_url TEXT NOT NULL DEFAULT ''",'')
+    with sqlite3.connect(path) as db:
+        db.executescript(schema)
+        db.execute("INSERT INTO groups(name,kind,color,maps_url,hero_title) VALUES('SEC Prueba','SEC','#3453d1','https://maps.app.goo.gl/conservar','Título conservado')")
+        db.commit();upgrade_schema(db);upgrade_schema(db)
+        assert db.execute('SELECT maps_embed_url,maps_url,hero_title FROM groups').fetchone()==('','https://maps.app.goo.gl/conservar','Título conservado')

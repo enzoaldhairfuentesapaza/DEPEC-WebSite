@@ -6,6 +6,8 @@ from datetime import datetime, date
 from pathlib import Path
 from random import Random
 from urllib.parse import urlencode
+from urllib.parse import urlsplit
+from html.parser import HTMLParser
 from zoneinfo import ZoneInfo
 from PIL import Image, UnidentifiedImageError
 
@@ -58,7 +60,7 @@ def upgrade_schema(connection):
     if connection.execute('PRAGMA user_version').fetchone()[0]<3:
         connection.execute("UPDATE groups SET color='#bd123b' WHERE id=1 AND color='#d46a3b'")
     names={r[1] for r in connection.execute('PRAGMA table_info(groups)')}
-    for name,definition in [('photo',"TEXT NOT NULL DEFAULT ''"),('maps_url',"TEXT NOT NULL DEFAULT ''")]:
+    for name,definition in [('photo',"TEXT NOT NULL DEFAULT ''"),('maps_url',"TEXT NOT NULL DEFAULT ''"),('maps_embed_url',"TEXT NOT NULL DEFAULT ''")]:
         if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
     connection.executescript((Path(__file__).parent/'community_schema.sql').read_text(encoding='utf-8'))
     for name,definition in [('hero_title',"TEXT NOT NULL DEFAULT ''"),('hero_description',"TEXT NOT NULL DEFAULT ''"),('verse_mode',"TEXT NOT NULL DEFAULT 'daily'"),('custom_verses',"TEXT NOT NULL DEFAULT '[]'"),('founded_date',"TEXT NOT NULL DEFAULT ''"),('anniversary_note',"TEXT NOT NULL DEFAULT ''")]:
@@ -99,6 +101,39 @@ def picture_info(file):
         file.stream.seek(0)
         raise ValueError('La imagen no es válida.') from exc
 
+GENERIC_EVENT_IMAGES={
+    'Encuentro':('images/event-encuentro.svg',720,1000),
+    'Comunidad':('images/event-comunidad.svg',1200,700),
+    'Servicio':('images/event-servicio.svg',1200,700),
+}
+
+def normalize_map_embed(value):
+    """Acepta el enlace de inserción o el iframe de Compartir > Insertar un mapa."""
+    value=value.strip()
+    if not value:return ''
+    if value.startswith('<'):
+        class FrameParser(HTMLParser):
+            sources=[]
+            def handle_starttag(self,tag,attrs):
+                if tag=='iframe':self.sources.append(dict(attrs).get('src',''))
+        parser=FrameParser();parser.sources=[];parser.feed(value)
+        if len(parser.sources)!=1:raise ValueError('Pega un único iframe de Google Maps.')
+        value=parser.sources[0]
+    parsed=urlsplit(value)
+    if (parsed.scheme!='https' or parsed.netloc not in ['www.google.com','maps.google.com','google.com']
+        or parsed.path not in ['/maps/embed','/maps/embed/'] or not parsed.query or len(value)>6000):
+        raise ValueError('Usa el enlace de Google Maps de Compartir → Insertar un mapa, no el enlace corto.')
+    return value
+
+def local_map(group):
+    exact=normalize_map_embed(group['maps_embed_url']) if group['maps_embed_url'] else ''
+    address=group['address'] or ''
+    confirmed=address and not any(word in address.lower() for word in ['ejemplo','por confirmar','ver ubicación'])
+    # El enlace corto no revela coordenadas: no inventamos un marcador para la iglesia.
+    query=address if confirmed else 'Arequipa, Perú'
+    return dict(src=exact or 'https://maps.google.com/maps?'+urlencode({'q':query,'z':15 if confirmed else 12,'output':'embed'}),
+                reference=not bool(exact or confirmed),link=group['maps_url'] or 'https://www.google.com/maps/search/?'+urlencode({'api':1,'query':query}))
+
 def event_presentation(data,group,at=None):
     result=dict(data)
     end=result.get('end_date') or result.get('date','')
@@ -108,7 +143,21 @@ def event_presentation(data,group,at=None):
     elif result.get('date','') <= (at or local_now()).isoformat(timespec='seconds'):state='En curso'
     else:state='Pronto'
     result['display_status']=state
-    result['orientation']='landscape' if int(result.get('image_width',0))>int(result.get('image_height',0)) else 'portrait'
+    mode=result.get('image_mode') or 'Imagen propia'
+    result['image_source']='none'
+    result['display_static']=''
+    if mode=='Imagen genérica':
+        preset=GENERIC_EVENT_IMAGES.get(result.get('generic_image'),GENERIC_EVENT_IMAGES['Encuentro'])
+        result['image_source']='static';result['display_static']=preset[0]
+        width,height=preset[1:]
+    elif mode!='Sin imagen' and (result.get('attachment') or result.get('poster_static')):
+        result['image_source']='upload' if result.get('attachment') else 'static'
+        result['display_static']=result.get('poster_static','')
+        width,height=int(result.get('image_width',0)),int(result.get('image_height',0))
+    else:width,height=1,0
+    layout=result.get('card_layout','Automático')
+    result['orientation']=('portrait' if layout=='Vertical' else 'landscape' if layout=='Horizontal' else 'landscape' if width>height else 'portrait')
+    result['has_image']=result['image_source']!='none'
     result['location']=result.get('location') or group['address'] or 'Lugar por confirmar'
     address=result.get('event_address') or result.get('location') or group['address']
     result['maps_link']='https://www.google.com/maps/search/?'+urlencode({'api':1,'query':address}) if address and 'por confirmar' not in address.lower() and 'ejemplo' not in address.lower() else ''

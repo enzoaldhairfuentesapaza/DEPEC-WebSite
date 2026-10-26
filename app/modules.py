@@ -20,3 +20,9 @@ for key in ['events','posts']:
 MODULES['events']['fields'].append(f('media_kind','Tipo de imagen','select',['Afiche','Fotografía'],required=False))
 
 MODULES={'announcements':dict(title='Tablón de anuncios',singular='anuncio',icon='⚑',description='Avisos temporales de tu organización. Se publican solo entre la fecha de inicio y vencimiento; si no hay avisos vigentes, el tablón se oculta.',fields=[f('title','Título del aviso'),f('body','Mensaje','textarea'),f('category','Prioridad','select',['Informativo','Importante','Urgente']),f('date','Mostrar desde (hora de Perú)','datetime-local'),f('end_date','Ocultar al vencer (hora de Perú)','datetime-local'),f('status','Publicación','select',['Borrador','Publicado','Retirado'])]),**MODULES}
+
+MODULES['events']['fields'].extend([
+    f('card_layout','Formato de la tarjeta','select',['Automático','Vertical','Horizontal'],required=False),
+    f('image_mode','Imagen de la tarjeta','select',['Imagen propia','Sin imagen','Imagen genérica'],required=False),
+    f('generic_image','Imagen genérica del sistema','select',['Encuentro','Comunidad','Servicio'],required=False),
+])

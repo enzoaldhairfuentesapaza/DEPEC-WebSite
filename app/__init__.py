@@ -246,7 +246,7 @@ def create_app(test_config=None):
         for field in MODULES[module]['fields']:
             key=field['key']; kind=field['kind']
             if kind=='file': continue
-            value=request.form.get(key,'').strip()
+            value=request.form.get(key, data.get(key,'') if module=='events' and key in ['card_layout','image_mode','generic_image'] else '').strip()
             if field['required'] and not value: raise ValueError('Completa '+field['label']+'.')
             if len(value)>12000: raise ValueError('Texto demasiado largo.')
             if kind=='select' and value and value not in field['options']: raise ValueError('Opción inválida.')
@@ -303,7 +303,9 @@ def create_app(test_config=None):
         if item and not allowed(item['group_id'],module,True): abort(403)
         writable=[dict(r) for r in db().execute('SELECT * FROM groups WHERE active=1') if allowed(r['id'],module,True)]
         if not writable: abort(403)
-        data=item['d'] if item else {}
+        data=dict(item['d']) if item else {}
+        if module=='events':
+            for key,default in [('card_layout','Automático'),('image_mode','Imagen propia'),('generic_image','Encuentro')]:data.setdefault(key,default)
         group_id=item['group_id'] if item else request.args.get('group',type=int)
         if request.method=='POST':
             try:
@@ -331,7 +333,12 @@ def create_app(test_config=None):
             except (ValueError,InvalidOperation):
                 flash('Revisa los datos: campos obligatorios, fechas y montos válidos; inicio anterior al fin.','error')
                 data={**data,**request.form.to_dict()}
-        return render_template('edit.html',module=module,config=MODULES[module],item=item,data=data,writable=writable,selected_group=group_id,event_options=records('events'))
+        preview_event=None
+        if module=='events':
+            preview_group=next((gr for gr in writable if gr['id']==group_id),writable[0])
+            preview_data={**data,'title':data.get('title') or 'Tu próximo encuentro','body':data.get('body') or 'La descripción de tu evento aparecerá aquí.','date':data.get('date') or now()[:16],'end_date':data.get('end_date') or now()[:16]}
+            preview_event=dict(id=record_id or 0,group_id=preview_group['id'],group_name=preview_group['name'],color=preview_group['color'],d=event_presentation(preview_data,preview_group))
+        return render_template('edit.html',module=module,config=MODULES[module],item=item,data=data,writable=writable,selected_group=group_id,event_options=records('events'),preview_event=preview_event)
 
     @app.post('/records/<int:record_id>/delete')
     @logged

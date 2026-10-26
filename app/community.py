@@ -9,7 +9,7 @@ from uuid import uuid4
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, send_file, url_for
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
-from .community_data import daily_verse, picture_info, group_verse, anniversary, local_now
+from .community_data import daily_verse, picture_info, group_verse, anniversary, local_now, normalize_map_embed, local_map
 from .retro import register_retro
 from .announcements import active_announcements
 from .community_data import LIMA
@@ -41,6 +41,7 @@ def register_community(app, services):
         if item['record_id']:
             record=services['get_record'](item['record_id']);d=record['d']
             if d.get('visibility')!='public':return False
+            if record['module']=='events' and d.get('image_mode') in ['Sin imagen','Imagen genérica']:return False
             if record['module'] in ['posts','gallery'] and (d.get('status')!='Publicado' or (record['module']=='posts' and d.get('date','')>now())):return False
         return True
 
@@ -63,7 +64,7 @@ def register_community(app, services):
     def public_context(scope):
         people=leaders(scope);ranking={'Presidente':0,'Vicepresidente':1,'Secretario':2,'Prosecretario':3,'Tesorero':4,'Protesorero':5,'Vocal':6}
         group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,page_members=retro['public_members'](scope),anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
+        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,local_map=local_map(group),page_members=retro['public_members'](scope),anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
 
     @bp.get('/archivos/<int:file_id>')
     def asset(file_id):
@@ -198,6 +199,7 @@ def register_community(app, services):
                     parsed=urlsplit(maps)
                     if parsed.scheme!='https' or parsed.hostname not in ['www.google.com','google.com','maps.google.com','maps.app.goo.gl','goo.gl'] or parsed.username:raise ValueError('Usa un enlace HTTPS de Google Maps.')
                 existing=db().execute('SELECT * FROM groups WHERE id=?',(gid,)).fetchone()
+                embed=normalize_map_embed(request.form.get('maps_embed_url',existing['maps_embed_url']))
                 hero_title=request.form.get('hero_title',existing['hero_title']).strip()
                 hero_description=request.form.get('hero_description',existing['hero_description']).strip()
                 mode=request.form.get('verse_mode',existing['verse_mode'])
@@ -219,6 +221,7 @@ def register_community(app, services):
                 photo=None;file=request.files.get('photo')
                 if file and file.filename:photo,_,_=save_image(file)
                 db().execute('UPDATE groups SET color=?,description=?,church=?,address=?,maps_url=?,schedule=? WHERE id=?',(color,request.form.get('description','')[:2000],request.form.get('church','')[:200],request.form.get('address','')[:500],maps,request.form.get('schedule','')[:500],gid))
+                db().execute('UPDATE groups SET maps_embed_url=? WHERE id=?',(embed,gid))
                 if photo:db().execute('UPDATE groups SET photo=? WHERE id=?',(photo,gid))
                 audit('Actualizó identidad pública y local',gid);db().commit();flash('Identidad actualizada.','success');return redirect(url_for('community.identity'))
             except ValueError as exc:flash(str(exc),'error')
