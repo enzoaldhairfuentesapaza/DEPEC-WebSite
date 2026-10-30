@@ -1,6 +1,14 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.4.6 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.4.8 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Ajuste v0.4.8 — imágenes sin botón visible
+
+Se retira el botón visible de ampliación sobre las fotografías. El clic en la imagen sigue abriendo el visor y se conserva el acceso mediante teclado. No cambia ninguna otra función.
+
+## Novedades v0.4.7 — destacados DEPEC y directorio de álbumes
+
+Rellenos verticales y cuadrados con composiciones propias; eventos DEPEC destacados con marco y cabecera de su color rojo; colores administrados desde el panel de los líderes DEPEC. Los eventos finalizados permanecen en el calendario, sin sección en las portadas. Cada portada muestra tres álbumes y enlaza a una página con búsqueda y paginación. Consulta `ACTUALIZAR_v0.4.7.md`.
 
 ## Novedades v0.4.6 — imágenes ampliables y contacto por organización
 

@@ -1,6 +1,7 @@
 """Empaqueta hasta seis eventos y cubre los huecos con imágenes decorativas."""
 
-FILLERS=['images/event-comunidad.svg','images/event-servicio.svg','images/event-encuentro.svg']
+FILLERS=['images/event-comunidad.svg','images/event-servicio.svg']
+PORTRAIT_FILLERS=['images/filler-portrait-red.svg','images/filler-portrait-green.svg']
 
 def pack_events(events,columns):
     occupied=set();positions=[]
@@ -31,7 +32,9 @@ def pack_events(events,columns):
                     if not occupied.intersection(cells):choices.append((height*width,width,height,cells))
             _,width,height,cells=max(choices,key=lambda option:option[:3])
             occupied.update(cells)
-            fillers.append(dict(row=row+1,column=col+1,rows=height,columns=width,image=FILLERS[len(fillers)%len(FILLERS)]))
+            orientation='portrait' if height>width else 'landscape' if width>height else 'square'
+            image=(PORTRAIT_FILLERS[len(fillers)%len(PORTRAIT_FILLERS)] if orientation=='portrait' else 'images/filler-square.svg' if orientation=='square' else FILLERS[len(fillers)%len(FILLERS)])
+            fillers.append(dict(row=row+1,column=col+1,rows=height,columns=width,image=image,orientation=orientation))
     return positions,fillers
 
 def build_event_collage(events):

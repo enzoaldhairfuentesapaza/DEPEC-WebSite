@@ -25,9 +25,10 @@ body.image-viewer-open {overflow:hidden}
 .image-zoom-container,.image-linked-wrapper {position:relative;min-width:0}
 .image-linked-wrapper[hidden],.image-linked-wrapper:has(>a[hidden]) {display:none!important}
 .image-linked-wrapper>.church-photo-card,.image-linked-wrapper>.album-card {width:100%}
-.image-expand-trigger {position:absolute;right:10px;top:10px;z-index:3;display:grid;place-items:center;width:38px;height:38px;padding:0;border:2px solid var(--rline);border-radius:8px;background:var(--rpanel);color:var(--rink);font:700 26px/1 system-ui,sans-serif;box-shadow:2px 2px 0 var(--rshadow);cursor:zoom-in}
-.image-expand-trigger:hover {background:var(--raccent);color:#302333}
-.image-expand-trigger:focus-visible {outline:3px solid var(--brand);outline-offset:3px}
+/* El control de teclado permanece disponible sin un botón visible sobre la foto. */
+.image-expand-trigger {position:absolute;width:1px;height:1px;padding:0;margin:-1px;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.image-zoom-container:has(>.image-expand-trigger:focus-visible) img,
+.image-linked-wrapper:has(>.image-expand-trigger:focus-visible) img {outline:3px solid var(--brand);outline-offset:-3px}
 a[data-viewer-link] {position:relative;cursor:zoom-in}
 .viewer-context-link {font-size:13px;font-weight:800;color:var(--brand);display:inline-block;margin-top:8px}
 

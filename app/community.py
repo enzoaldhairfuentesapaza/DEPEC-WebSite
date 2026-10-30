@@ -1,6 +1,8 @@
 """Álbumes, archivos, perfiles y membresía aprobada. Permisos siempre en servidor."""
 import re
 import json
+import math
+import unicodedata
 from datetime import date
 import sqlite3
 from pathlib import Path
@@ -25,6 +27,9 @@ def register_community(app, services):
     def can_review(gid):
         return bool(g.user and (g.user['admin'] or {'Presidente','Vicepresidente','Secretario','Prosecretario','Líder'} & roles_for(gid)))
 
+    def can_manage_palette():
+        return bool(g.user and (g.user['admin'] or roles_for(1)))
+
     def save_image(file):
         name=secure_filename(file.filename or '')
         if '.' not in name or name.rsplit('.',1)[-1].lower() not in ['png','jpg','jpeg']:raise ValueError('Usa PNG o JPG.')
@@ -45,15 +50,42 @@ def register_community(app, services):
             if record['module'] in ['posts','gallery'] and (d.get('status')!='Publicado' or (record['module']=='posts' and d.get('date','')>now())):return False
         return True
 
-    def public_files(scope=None,album=None):
-        rows=db().execute('SELECT m.*,u.name uploader,gr.name church_name,a.title album_title FROM media_files m JOIN users u ON u.id=m.uploaded_by JOIN groups gr ON gr.id=m.group_id LEFT JOIN albums a ON a.id=m.album_id ORDER BY m.created DESC,m.id DESC').fetchall()
-        return [dict(r) for r in rows if (scope is None or r['group_id']==scope) and (album is None or r['album_id']==album) and file_visible(r)]
-
-    def public_albums(scope):
+    def public_files(scope=None,album=None,limit=None):
+        where=[];parameters=[]
+        if scope is not None:where.append('m.group_id=?');parameters.append(scope)
+        if album is not None:where.append('m.album_id=?');parameters.append(album)
+        rows=db().execute('SELECT m.*,u.name uploader,gr.name church_name,a.title album_title FROM media_files m JOIN users u ON u.id=m.uploaded_by JOIN groups gr ON gr.id=m.group_id LEFT JOIN albums a ON a.id=m.album_id'+(' WHERE '+' AND '.join(where) if where else '')+' ORDER BY m.created DESC,m.id DESC',parameters)
         output=[]
-        for row in db().execute('SELECT a.*,gr.name group_name FROM albums a JOIN groups gr ON gr.id=a.group_id WHERE a.group_id=? AND a.visibility=\'public\' ORDER BY a.id DESC',(scope,)):
-            item=dict(row); photos=public_files(album=row['id']);item['photos']=photos;item['cover']=photos[0] if photos else None;output.append(item)
+        for row in rows:
+            if file_visible(row):
+                output.append(dict(row))
+                if limit is not None and len(output)>=limit:break
         return output
+
+    def album_cards(scope,query='',page=1,per_page=12):
+        def fold(value):
+            return ''.join(ch for ch in unicodedata.normalize('NFKD',str(value).casefold()) if not unicodedata.combining(ch))
+        db().create_function('fold_text',1,fold,deterministic=True)
+        search=fold(query).replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
+        where="a.group_id=? AND a.visibility='public' AND gr.active=1 AND fold_text(a.title||' '||a.description) LIKE ? ESCAPE '\\'"
+        parameters=(scope,'%'+search+'%')
+        total=db().execute('SELECT count(*) FROM albums a JOIN groups gr ON gr.id=a.group_id WHERE '+where,parameters).fetchone()[0]
+        pages=max(1,math.ceil(total/per_page))
+        if page<1 or page>pages:abort(404)
+        rows=db().execute('SELECT a.*,gr.name group_name FROM albums a JOIN groups gr ON gr.id=a.group_id WHERE '+where+' ORDER BY a.id DESC LIMIT ? OFFSET ?',(*parameters,per_page,(page-1)*per_page)).fetchall()
+        # Cuenta/portada sin cargar todas las fotografías de todos los álbumes.
+        visible="""m.album_id=? AND m.visibility='public' AND
+            (m.record_id IS NULL OR (r.id IS NOT NULL AND json_extract(r.data,'$.visibility')='public'
+            AND (r.module!='events' OR coalesce(json_extract(r.data,'$.image_mode'),'') NOT IN ('Sin imagen','Imagen genérica'))
+            AND (r.module NOT IN ('posts','gallery') OR json_extract(r.data,'$.status')='Publicado')
+            AND (r.module!='posts' OR coalesce(json_extract(r.data,'$.date'),'')<=?)))"""
+        output=[]
+        for row in rows:
+            item=dict(row);args=(row['id'],now())
+            item['photo_count']=db().execute('SELECT count(*) FROM media_files m LEFT JOIN records r ON r.id=m.record_id WHERE '+visible,args).fetchone()[0]
+            cover=db().execute('SELECT m.id,m.title FROM media_files m LEFT JOIN records r ON r.id=m.record_id WHERE '+visible+' ORDER BY m.created DESC,m.id DESC LIMIT 1',args).fetchone()
+            item['cover']=dict(cover) if cover else None;output.append(item)
+        return dict(albums=output,total=total,page=page,pages=pages)
 
     def leaders(scope):
         return [dict(r) for r in db().execute('SELECT a.role,u.id user_id,u.name,p.message,p.phone,p.photo,p.featured FROM assignments a JOIN users u ON u.id=a.user_id JOIN leader_profiles p ON p.user_id=u.id AND p.group_id=a.group_id WHERE a.group_id=? AND a.active=1 AND u.active=1 AND p.published=1 ORDER BY a.id',(scope,))]
@@ -64,7 +96,36 @@ def register_community(app, services):
     def public_context(scope):
         people=leaders(scope);ranking={'Presidente':0,'Vicepresidente':1,'Secretario':2,'Prosecretario':3,'Tesorero':4,'Protesorero':5,'Vocal':6}
         group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,local_map=local_map(group) if group['kind']!='DEPEC' else None,birthday_people=[p for p in retro['public_birthdays'](scope) if p['month']==local_now().month],page_members=retro['public_members'](scope) if scope!=1 else [],anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
+        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,local_map=local_map(group) if group['kind']!='DEPEC' else None,birthday_people=[p for p in retro['public_birthdays'](scope) if p['month']==local_now().month],page_members=retro['public_members'](scope) if scope!=1 else [],anniversary_info=anniversary(group),hero_files=public_files(scope,limit=8),albums=album_cards(scope,per_page=3)['albums'],testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
+
+    @bp.get('/albumes')
+    def albums_directory():
+        scope=request.args.get('group',1,type=int)
+        group=db().execute('SELECT * FROM groups WHERE id=? AND active=1',(scope,)).fetchone()
+        if not group:abort(404)
+        query=request.args.get('q','').strip()
+        try:page=int(request.args.get('page','1'))
+        except ValueError:abort(400)
+        if len(query)>120 or page<1:abort(400)
+        result=album_cards(scope,query,page)
+        return render_template('albums_directory.html',public_page=True,selected=group,query=query,**result)
+
+    @bp.route('/panel/colores',methods=['GET','POST'])
+    @logged
+    def palette():
+        if not can_manage_palette():abort(403)
+        if request.method=='POST':
+            gid=request.form.get('group_id',type=int);color=request.form.get('color','')
+            group=db().execute('SELECT * FROM groups WHERE id=? AND active=1',(gid,)).fetchone()
+            if not group:abort(404)
+            if not re.fullmatch('#[0-9a-fA-F]{6}',color):
+                flash('Selecciona un color válido.','error')
+            else:
+                db().execute('UPDATE groups SET color=? WHERE id=?',(color,gid))
+                audit('Actualizó color de '+group['name'],gid);db().commit()
+                flash('Color actualizado en la página, eventos, calendario y contacto.','success')
+                return redirect(url_for('community.palette'))
+        return render_template('palette.html',organizations=db().execute('SELECT * FROM groups WHERE active=1 ORDER BY id').fetchall())
 
     @bp.get('/archivos/<int:file_id>')
     def asset(file_id):
@@ -217,7 +278,7 @@ def register_community(app, services):
             gid=request.form.get('group_id',type=int)
             if gid not in [r['id'] for r in scopes] or not can_review(gid):abort(403)
             try:
-                color=request.form.get('color','');maps=request.form.get('maps_url','').strip()
+                color=request.form.get('color','') if can_manage_palette() else next(gr['color'] for gr in scopes if gr['id']==gid);maps=request.form.get('maps_url','').strip()
                 if not re.fullmatch('#[0-9a-fA-F]{6}',color):raise ValueError('Color inválido.')
                 if db().execute('SELECT kind FROM groups WHERE id=?',(gid,)).fetchone()[0]=='DEPEC':maps=''
                 if maps:
@@ -312,4 +373,4 @@ def register_community(app, services):
 
     retro=register_retro(app,dict(db=db,logged=logged,audit=audit,now=now,save_image=save_image,can_review=can_review))
     app.register_blueprint(bp)
-    return dict(public_context=public_context,is_leader=is_leader,can_review=can_review)
+    return dict(public_context=public_context,is_leader=is_leader,can_review=can_review,can_manage_palette=can_manage_palette)

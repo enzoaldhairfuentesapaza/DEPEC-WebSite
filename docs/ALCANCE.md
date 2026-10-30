@@ -74,3 +74,7 @@ Collage de eventos en cuatro columnas con colocación calculada y rellenos decor
 ## Actualización v0.4.6
 
 Visor accesible para imágenes públicas, ajuste a pantalla/tamaño original, navegación por grupo de imágenes y controles de teclado. Burbuja de contacto por organización con edición autorizada, opción de ocultar, enlaces seguros a WhatsApp/llamada/correo y configuración independiente de DEPEC, iglesias y sus álbumes. No se cambian permisos de acceso a imágenes ni se envían mensajes automáticamente.
+
+## Actualización v0.4.7
+
+Ilustraciones propias para rellenos verticales/cuadrados sin recortar texto, destacados DEPEC con su identidad roja, paleta central gestionada por líderes DEPEC, historia de eventos solo en calendario y directorio público de álbumes con búsqueda por comunidad y paginación. Las portadas muestran como máximo tres álbumes.

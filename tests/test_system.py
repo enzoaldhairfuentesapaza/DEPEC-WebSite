@@ -803,7 +803,7 @@ def test_depec_home_has_own_directive_and_no_member_directory(client):
     assert 'Voces de nuestras <em>iglesias.</em>' in root
 
 
-def test_golden_depec_events_and_decorative_fillers_are_scoped(client,app):
+def test_featured_depec_events_and_decorative_fillers_are_scoped(client,app):
     from app.community_data import local_now
     future=local_now()+timedelta(days=5)
     with sqlite3.connect(app.config['DATABASE']) as db:
@@ -821,11 +821,11 @@ def test_golden_depec_events_and_decorative_fillers_are_scoped(client,app):
             if tag=='article' and 'data-placement' in a:self.tiles.append(a)
             if tag=='figure' and 'collage-filler' in a.get('class',''):self.fillers.append(a)
     root=Tiles();root.feed(client.get('/').get_data(as_text=True))
-    assert len(root.tiles)==2 and len([t for t in root.tiles if 'depec-gold-event' in t['class']])==1
+    assert len(root.tiles)==2 and len([t for t in root.tiles if 'depec-featured-event' in t['class']])==1
     assert root.fillers and all(f['aria-hidden']=='true' for f in root.fillers)
     assert all('--row4:' in tile['style'] and '--row2:' in tile['style'] and '--row1:' in tile['style'] for tile in root.tiles)
     church=Tiles();church.feed(client.get('/?group=3').get_data(as_text=True))
-    assert len(church.tiles)==1 and 'depec-gold-event' not in church.tiles[0]['class']
+    assert len(church.tiles)==1 and 'depec-featured-event' not in church.tiles[0]['class']
 
 
 def test_message_collage_preserves_church_and_moderation(client,app):
@@ -917,3 +917,97 @@ def test_member_cannot_edit_contact_and_uses_own_church_bubble(client):
     csrf=login(client,'miembro-0@demo.depec.local')
     assert client.post('/panel/contacto',data=dict(csrf=csrf,group_id=3,enabled='1')).status_code==403
     assert 'data-contact-group="3"' in client.get('/mi-perfil').get_data(as_text=True)
+
+# v0.4.7 — rellenos por orientación, historia en calendario y álbumes paginados.
+def album_ids(html):
+    from html.parser import HTMLParser
+    class Albums(HTMLParser):
+        def __init__(self):super().__init__();self.ids=[]
+        def handle_starttag(self,tag,attrs):
+            attrs=dict(attrs)
+            if tag=='a' and 'data-album-id' in attrs:self.ids.append(int(attrs['data-album-id']))
+    parser=Albums();parser.feed(html);return parser.ids
+
+
+def test_fillers_use_compositions_for_their_actual_orientation():
+    from app.collage import build_event_collage
+    events=[dict(id=i,d=dict(orientation='portrait')) for i in range(5)]
+    collage=build_event_collage(events)
+    assert collage['fillers']
+    for filler in collage['fillers']:
+        if filler['rows']>filler['columns']:
+            assert filler['orientation']=='portrait' and 'filler-portrait-' in filler['image']
+        elif filler['rows']==filler['columns']:
+            assert filler['orientation']=='square' and filler['image'].endswith('filler-square.svg')
+        else:assert filler['orientation']=='landscape'
+        assert (Path(__file__).parents[1]/'app'/'static'/filler['image']).exists()
+
+
+def test_home_excludes_completed_events_but_past_calendar_retains_them(client,app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        data=payload();data.update(title='Encuentro histórico conservado',date='2020-05-10T16:00',end_date='2020-05-10T19:00',status='Programado')
+        rid=db.execute("INSERT INTO records(module,group_id,data,author_id,created,updated) VALUES('events',3,?,1,'2020-05-01','2020-05-01')",(json.dumps(data),)).lastrowid
+    for path in ['/','/?group=3']:
+        page=client.get(path).get_data(as_text=True)
+        assert 'Encuentro histórico conservado' not in page
+        assert 'Ya compartimos estos momentos' not in page and 'class="past-events"' not in page
+    page=client.get(f'/calendar?public=1&group=3&month=2020-05-01&event={rid}').get_data(as_text=True)
+    assert 'Encuentro histórico conservado' in page and 'Finalizado' in page
+    with sqlite3.connect(app.config['DATABASE']) as db:assert json.loads(db.execute('SELECT data FROM records WHERE id=?',(rid,)).fetchone()[0])['status']=='Finalizado'
+
+
+def test_album_home_limit_directory_pagination_search_and_scope(client,app):
+    ids=[]
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        for i in range(18):
+            ids.append(db.execute("INSERT INTO albums(group_id,title,description,created_by,created) VALUES(3,?,'Recuerdos de la comunidad',1,'2026-01-01')",(f'CAFÉ JÓVENES {i:02}',)).lastrowid)
+        secret=db.execute("INSERT INTO albums(group_id,title,visibility,created_by,created) VALUES(3,'Álbum interno oculto','internal',1,'2026-01-01')").lastrowid
+    home=client.get('/?group=3').get_data(as_text=True)
+    assert album_ids(home)==list(reversed(ids[-3:])) and 'Ver todos los álbumes' in home
+    first=client.get('/albumes?group=3&q=cafe+jovenes').get_data(as_text=True)
+    second=client.get('/albumes?group=3&q=cafe+jovenes&page=2').get_data(as_text=True)
+    assert len(album_ids(first))==12 and len(album_ids(second))==6
+    assert set(album_ids(first)+album_ids(second))==set(ids)
+    assert 'Álbum interno oculto' not in first and secret not in album_ids(first)
+    assert 'data-contact-group="3"' in first and 'data-image-viewer' in first
+    assert not album_ids(client.get('/albumes?group=1&q=cafe+jovenes').get_data(as_text=True))
+    assert not album_ids(client.get('/albumes?group=3&q=%25').get_data(as_text=True))
+    assert client.get('/albumes?group=999').status_code==404
+    for suffix in ['page=0','page=abc','q='+'a'*121]:assert client.get('/albumes?group=3&'+suffix).status_code==400
+    assert client.get('/albumes?group=3&page=999').status_code==404
+
+
+def test_album_cards_count_only_images_publicly_visible(client,app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        aid=db.execute("INSERT INTO albums(group_id,title,created_by,created) VALUES(3,'Álbum con permisos',1,'2026-01-01')").lastrowid
+        visible=db.execute("INSERT INTO media_files(group_id,album_id,title,kind,static_name,width,height,uploaded_by,visibility,created) VALUES(3,?,'Imagen pública','Fotografía','demo/amistad.png',1536,1024,1,'public','2026-01-01')",(aid,)).lastrowid
+        hidden=db.execute("INSERT INTO media_files(group_id,album_id,title,kind,static_name,width,height,uploaded_by,visibility,created) VALUES(3,?,'Imagen privada','Fotografía','demo/servicio.png',1536,1024,1,'internal','2026-01-02')",(aid,)).lastrowid
+        draft=db.execute("INSERT INTO records(module,group_id,data,author_id,created,updated) VALUES('gallery',3,?,1,'2026-01-01','2026-01-01')",(json.dumps(dict(title='Borrador',visibility='public',status='Borrador')),)).lastrowid
+        db.execute("INSERT INTO media_files(group_id,album_id,record_id,title,kind,static_name,width,height,uploaded_by,visibility,created) VALUES(3,?,?,'Foto en borrador','Fotografía','demo/amistad.png',1536,1024,1,'public','2026-01-03')",(aid,draft))
+    page=client.get('/albumes?group=3&q=permisos').get_data(as_text=True)
+    assert '1 fotografía' in page and f'/archivos/{visible}' in page and f'/archivos/{hidden}' not in page
+    csrf=login(client)
+    page=client.get('/albumes?group=3&q=permisos').get_data(as_text=True)
+    assert '1 fotografía' in page and 'Imagen privada' not in page
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute('UPDATE records SET data=? WHERE id=?',(json.dumps(dict(title='Ahora publicada',visibility='public',status='Publicado')),draft))
+    assert '2 fotografías' in client.get('/albumes?group=3&q=permisos').get_data(as_text=True)
+
+
+def test_depec_leaders_manage_palette_and_church_cannot_change_it(client,app):
+    csrf=login(client,'presidencia@depec.demo')
+    assert client.get('/panel/colores').status_code==200
+    assert client.post('/panel/colores',data=dict(csrf=csrf,group_id=3,color='#7a35b4')).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT color FROM groups WHERE id=3').fetchone()[0]=='#7a35b4'
+        assert db.execute('SELECT color FROM groups WHERE id=1').fetchone()[0]=='#cc254b'
+    assert '--brand:#7a35b4' in client.get('/?group=3').get_data(as_text=True)
+    assert client.post('/panel/colores',data=dict(csrf=csrf,group_id=3,color='red')).status_code==200
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT color FROM groups WHERE id=3').fetchone()[0]=='#7a35b4'
+    other=app.test_client();csrf2=login(other,'israel@depec.demo')
+    assert other.get('/panel/colores').status_code==403
+    assert other.post('/panel/colores',data=dict(csrf=csrf2,group_id=2,color='#ffffff')).status_code==403
+    with sqlite3.connect(app.config['DATABASE']) as db:before=db.execute('SELECT color FROM groups WHERE id=2').fetchone()[0]
+    assert other.post('/panel/identidad',data=dict(csrf=csrf2,group_id=2,color='#ffffff',hero_title='Nuestra identidad',verse_mode='daily')).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT color FROM groups WHERE id=2').fetchone()[0]==before
+    assert client.post('/panel/colores',data=dict(group_id=3,color='#ffffff')).status_code==400

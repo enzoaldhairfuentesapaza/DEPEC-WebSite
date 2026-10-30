@@ -17,17 +17,27 @@
 .collage-filler img {display:block;width:100%;height:100%;object-fit:cover}
 .filler-layout-2,.filler-layout-1 {display:none}
 
-/* El dorado identifica solo los encuentros de DEPEC en la portada general. */
-.public .event-collage.retro-collage .depec-gold-event {
-  border:3px solid #b78316;box-shadow:0 0 0 2px #f6d782,4px 5px 0 var(--rshadow);
+/* DEPEC destaca por su cabecera y marco de color, conservando su identidad roja. */
+.public .event-collage.retro-collage .depec-featured-event {
+  border:3px solid var(--church);border-top-width:9px;box-shadow:5px 5px 0 var(--church);
 }
-.public .event-collage.retro-collage .depec-gold-event .church-label {
-  color:#4d3304!important;background:#ffe7a3;border:1px solid #b78316;
+.public .event-collage.retro-collage .depec-featured-event .y-event-content {
+  background:color-mix(in srgb,var(--church) 5%,var(--rpanel));justify-content:flex-start;
 }
-.public .event-collage.retro-collage .depec-gold-event .y-event-content {
-  background:linear-gradient(125deg,color-mix(in srgb,#efbd4c 10%,var(--rpanel)),var(--rpanel));
+.public .event-collage.retro-collage .depec-featured-event .event-labels {
+  margin:-13px -13px 12px;padding:9px 11px;background:var(--church);border-bottom:2px solid var(--rline);justify-content:space-between;
 }
-[data-theme="dark"] .public .event-collage.retro-collage .depec-gold-event {border-color:#f0ca67;box-shadow:0 0 0 2px #8b6219,4px 5px 0 var(--rshadow)}
+.public .event-collage.retro-collage .depec-featured-event .church-label {
+  background:transparent;color:var(--on-church)!important;border:0;padding:0;min-height:24px;font-size:12px;display:flex;align-items:center;
+}
+.public .event-collage.retro-collage .depec-featured-event .event-state {
+  background:var(--rpanel);color:var(--rink);border:1px solid var(--rline);
+}
+.depec-organizer {font-size:10px;letter-spacing:.5px;font-weight:800;margin-left:4px}
+.collage-filler.filler-portrait img,.collage-filler.filler-square img {object-fit:contain}
+.collage-filler.filler-portrait {background:#cc254b}
+.collage-filler.filler-portrait:has(img[src*="green"]) {background:#087b67}
+.collage-filler.filler-square {background:#3453d1}
 
 /* Mural de mensajes: cada nota conserva la iglesia y la aprobación del autor. */
 .public .testimonials-grid.message-collage {display:block;columns:3;column-gap:20px}
@@ -62,3 +72,24 @@
   .public .event-collage.retro-collage .collage-tile.text-only {grid-template-columns:1fr;grid-template-rows:1fr}
   .public .testimonials-grid.message-collage {columns:1}
 }
+
+/* Directorio de álbumes y administración de identidad. */
+.albums-directory {padding:32px 0 50px}
+.albums-directory>.home-section-heading {margin-top:30px}
+.public .albums-directory h1 {font:800 clamp(32px,4vw,48px)/1.15 Georgia,serif;margin:15px 0}
+.public .albums-directory h1 em {color:var(--brand)}
+.album-search {display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;background:var(--rpanel);border:2px solid var(--rline);border-radius:6px;padding:20px;box-shadow:4px 4px 0 var(--rshadow)}
+.album-search label {flex:1 1 220px;font-size:13px;font-weight:700;display:grid;gap:9px;color:var(--rink)}
+.album-search input,.album-search select {width:100%;font-size:15px;padding:12px;border:1px solid var(--rline);border-radius:4px;background:var(--rpaper);color:var(--rink);min-height:46px}
+.public .album-results {font-size:14px;color:var(--rmuted);margin:25px 0}
+.album-pagination {display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:20px;margin-top:35px;font-size:14px}
+.palette-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:24px}
+.palette-card {padding:20px}
+.palette-sample {padding:20px;margin-bottom:20px;background:var(--church);color:var(--on-church);border:2px solid var(--rline);border-radius:6px}
+.private .palette-sample h2 {font:800 24px/1.3 Georgia,serif;color:var(--on-church);margin:10px 0}
+.palette-sample p {color:var(--on-church);font-size:13px;line-height:1.6}
+.palette-sample>span {font-size:12px;font-weight:800}
+.palette-card label {display:grid;gap:12px;font-weight:700;font-size:14px}
+.palette-card input[type=color] {height:52px;width:100%;cursor:pointer}
+@media(max-width:950px){.palette-grid {grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.palette-grid {grid-template-columns:1fr}.album-search {padding:16px}.album-search label {flex-basis:100%}.album-search .button {flex:1}.public .event-collage.retro-collage .depec-featured-event .event-labels {padding:8px}}
