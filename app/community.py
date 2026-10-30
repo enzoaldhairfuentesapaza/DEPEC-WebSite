@@ -59,12 +59,12 @@ def register_community(app, services):
         return [dict(r) for r in db().execute('SELECT a.role,u.id user_id,u.name,p.message,p.phone,p.photo,p.featured FROM assignments a JOIN users u ON u.id=a.user_id JOIN leader_profiles p ON p.user_id=u.id AND p.group_id=a.group_id WHERE a.group_id=? AND a.active=1 AND u.active=1 AND p.published=1 ORDER BY a.id',(scope,))]
 
     def messages(scope):
-        return db().execute('SELECT m.*,u.name,gr.name group_name FROM community_messages m JOIN users u ON u.id=m.user_id JOIN groups gr ON gr.id=m.group_id JOIN memberships ms ON ms.user_id=u.id AND ms.status=\'Aprobado\' WHERE m.status=\'Aprobado\' AND u.active=1 AND (?=1 OR m.group_id=?) ORDER BY m.id DESC LIMIT 12',(scope,scope)).fetchall()
+        return db().execute('SELECT m.*,u.name,gr.name group_name,gr.color FROM community_messages m JOIN users u ON u.id=m.user_id JOIN groups gr ON gr.id=m.group_id JOIN memberships ms ON ms.user_id=u.id AND ms.status=\'Aprobado\' WHERE m.status=\'Aprobado\' AND u.active=1 AND (?=1 OR m.group_id=?) ORDER BY m.id DESC LIMIT 12',(scope,scope)).fetchall()
 
     def public_context(scope):
         people=leaders(scope);ranking={'Presidente':0,'Vicepresidente':1,'Secretario':2,'Prosecretario':3,'Tesorero':4,'Protesorero':5,'Vocal':6}
         group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,local_map=local_map(group) if group['kind']!='DEPEC' else None,birthday_people=[p for p in retro['public_birthdays'](scope) if p['month']==local_now().month],page_members=retro['public_members'](scope),anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
+        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,local_map=local_map(group) if group['kind']!='DEPEC' else None,birthday_people=[p for p in retro['public_birthdays'](scope) if p['month']==local_now().month],page_members=retro['public_members'](scope) if scope!=1 else [],anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
 
     @bp.get('/archivos/<int:file_id>')
     def asset(file_id):
@@ -180,7 +180,7 @@ def register_community(app, services):
                 db().execute('UPDATE users SET active=? WHERE id=?',(int(decision=='Aprobado'),item['user_id']))
             audit(f'{decision}: {action} #{item_id}',item['group_id']);db().commit();flash('Revisión guardada.','success');return redirect(url_for('community.approvals'))
         applications=[r for r in db().execute('SELECT ms.*,u.name,u.email,gr.name group_name FROM memberships ms JOIN users u ON u.id=ms.user_id JOIN groups gr ON gr.id=ms.group_id ORDER BY ms.id DESC') if can_review(r['group_id'])]
-        messages=[r for r in db().execute('SELECT m.*,u.name,gr.name group_name FROM community_messages m JOIN users u ON u.id=m.user_id JOIN groups gr ON gr.id=m.group_id ORDER BY m.id DESC') if can_review(r['group_id'])]
+        messages=[r for r in db().execute('SELECT m.*,u.name,gr.name group_name,gr.color FROM community_messages m JOIN users u ON u.id=m.user_id JOIN groups gr ON gr.id=m.group_id ORDER BY m.id DESC') if can_review(r['group_id'])]
         profiles=[r for r in db().execute('SELECT p.*,p.user_id id,u.name,ms.group_id,gr.name group_name FROM member_profiles p JOIN users u ON u.id=p.user_id JOIN memberships ms ON ms.user_id=p.user_id JOIN groups gr ON gr.id=ms.group_id ORDER BY p.updated DESC') if can_review(r['group_id'])]
         return render_template('approvals.html',applications=applications,messages=messages,profile_reviews=profiles)
 

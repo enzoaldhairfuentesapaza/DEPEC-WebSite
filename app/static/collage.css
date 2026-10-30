@@ -1,0 +1,64 @@
+/* v0.4.5: cuatro columnas y rellenos calculados para cada ancho. */
+.public .event-collage.retro-collage {
+  grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:none;
+  grid-auto-rows:240px;max-width:1120px;gap:16px;aspect-ratio:auto;
+}
+.public .event-collage.retro-collage .collage-tile[data-placement] {
+  grid-row:var(--row4)/span var(--rows4)!important;
+  grid-column:var(--col4)/span var(--cols4)!important;
+  width:auto;max-width:none;justify-self:stretch;min-height:0;
+}
+.public .event-collage.retro-collage .collage-tile.portrait {grid-template-rows:minmax(130px,1fr) auto}
+.public .event-collage.retro-collage .collage-tile.landscape {grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
+.public .event-collage.retro-collage .collage-tile.text-only {grid-template-columns:1fr;grid-template-rows:1fr}
+.public .event-collage.retro-collage .collage-tile .y-event-content {padding:13px}
+.public .event-collage.retro-collage h3 {font-size:19px;line-height:1.25}
+.collage-filler {margin:0;min-width:0;min-height:0;overflow:hidden;border:2px solid var(--rline);border-radius:6px;background:var(--rsoft);box-shadow:4px 4px 0 var(--rshadow)}
+.collage-filler img {display:block;width:100%;height:100%;object-fit:cover}
+.filler-layout-2,.filler-layout-1 {display:none}
+
+/* El dorado identifica solo los encuentros de DEPEC en la portada general. */
+.public .event-collage.retro-collage .depec-gold-event {
+  border:3px solid #b78316;box-shadow:0 0 0 2px #f6d782,4px 5px 0 var(--rshadow);
+}
+.public .event-collage.retro-collage .depec-gold-event .church-label {
+  color:#4d3304!important;background:#ffe7a3;border:1px solid #b78316;
+}
+.public .event-collage.retro-collage .depec-gold-event .y-event-content {
+  background:linear-gradient(125deg,color-mix(in srgb,#efbd4c 10%,var(--rpanel)),var(--rpanel));
+}
+[data-theme="dark"] .public .event-collage.retro-collage .depec-gold-event {border-color:#f0ca67;box-shadow:0 0 0 2px #8b6219,4px 5px 0 var(--rshadow)}
+
+/* Mural de mensajes: cada nota conserva la iglesia y la aprobación del autor. */
+.public .testimonials-grid.message-collage {display:block;columns:3;column-gap:20px}
+.public .message-collage .testimony {
+  display:inline-block;width:100%;box-sizing:border-box;break-inside:avoid;
+  padding:24px 20px 20px;margin:0 0 22px;border-top:6px solid var(--church);
+  position:relative;vertical-align:top;
+}
+.public .message-collage .testimony::before {
+  content:'';position:absolute;top:-12px;left:calc(50% - 30px);height:20px;width:60px;
+  border:1px solid color-mix(in srgb,var(--rline) 30%,transparent);
+  background:color-mix(in srgb,var(--raccent) 70%,transparent);transform:rotate(-5deg);
+}
+.public .message-collage .testimony:nth-child(3n+2) {padding-top:37px;background:color-mix(in srgb,var(--church) 8%,var(--rpanel))}
+.public .message-collage .testimony:nth-child(3n) {padding-bottom:30px}
+.public .message-collage .testimony blockquote {font:italic 17px/1.75 Georgia,serif;margin:12px 0 22px}
+.public .message-collage .testimony>span {color:var(--church);font-size:42px}
+.public .testimony figcaption .message-church {display:table;background:var(--church);color:var(--on-church);border-radius:3px;padding:4px 7px;margin:7px 0;font-size:11px;font-weight:800;line-height:1.5}
+
+@media(max-width:1000px){
+  .public .event-collage.retro-collage {grid-template-columns:repeat(2,minmax(0,1fr));max-width:700px;grid-auto-rows:240px}
+  .public .event-collage.retro-collage .collage-tile[data-placement] {grid-row:var(--row2)/span var(--rows2)!important;grid-column:var(--col2)/span var(--cols2)!important}
+  .filler-layout-4 {display:none}.filler-layout-2 {display:block}
+  .public .testimonials-grid.message-collage {columns:2;column-gap:18px}
+}
+@media(max-width:520px){
+  .public .event-collage.retro-collage {grid-template-columns:minmax(0,1fr);max-width:380px;grid-auto-rows:230px;gap:16px}
+  .public .event-collage.retro-collage .collage-tile[data-placement] {grid-row:var(--row1)/span var(--rows1)!important;grid-column:var(--col1)/span var(--cols1)!important}
+  .filler-layout-2 {display:none}.filler-layout-1 {display:block}
+  .public .event-collage.retro-collage .collage-tile.portrait {grid-template-rows:minmax(190px,1fr) auto}
+  .public .event-collage.retro-collage .collage-tile.landscape {grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr)}
+  .public .event-collage.retro-collage .collage-tile.text-only {grid-template-columns:1fr;grid-template-rows:1fr}
+  .public .testimonials-grid.message-collage {columns:1}
+}

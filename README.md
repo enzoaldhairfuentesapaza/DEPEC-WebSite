@@ -1,6 +1,10 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.4.4 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.4.5 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Novedades v0.4.5 — collage en cuatro columnas y portada DEPEC
+
+Collage de hasta seis eventos en cuatro columnas de escritorio, con huecos cubiertos por imágenes decorativas del sistema y bordes dorados para los encuentros de DEPEC en la portada general. Las SEC/GJ conservan sus perfiles de miembros; DEPEC muestra DIRECTIVA DEPEC y un mural de mensajes aprobados de las iglesias. Consulta `ACTUALIZAR_v0.4.5.md`.
 
 ## Novedades v0.4.4 — DEPEC sin local y calendario de cumpleaños
 

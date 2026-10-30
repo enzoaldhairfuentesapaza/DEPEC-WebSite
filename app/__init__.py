@@ -20,6 +20,7 @@ from .modules import MODULES, ROLES
 from .community_data import upgrade_schema, local_now, event_presentation, picture_info, contrast_color, verse_lines
 from .community import register_community
 from .announcements import announcement_state
+from .collage import build_event_collage
 
 
 def create_app(test_config=None):
@@ -89,7 +90,7 @@ def create_app(test_config=None):
         return bool({'Secretario','Prosecretario'} & roles)
 
     def records(module, scope=None, public=False):
-        rows=db().execute('SELECT records.*,groups.name group_name,groups.color FROM records JOIN groups ON groups.id=group_id WHERE module=? ORDER BY records.id DESC',(module,)).fetchall()
+        rows=db().execute('SELECT records.*,groups.name group_name,groups.color,groups.kind group_kind FROM records JOIN groups ON groups.id=group_id WHERE module=? ORDER BY records.id DESC',(module,)).fetchall()
         result=[]
         for row in rows:
             item=dict(row); item['d']=json.loads(row['data'])
@@ -161,7 +162,7 @@ def create_app(test_config=None):
             album=db().execute('SELECT group_id FROM albums WHERE id=?',((request.view_args or {}).get('album_id'),)).fetchone()
             if album:scope=album['group_id']
         brand_group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(contrast_color=contrast_color,brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
+        return dict(build_event_collage=build_event_collage,contrast_color=contrast_color,brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
 
     @app.route('/')
     def public():

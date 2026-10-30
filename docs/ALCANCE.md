@@ -66,3 +66,7 @@ Tablón público de anuncios por organización, con prioridad, inicio, vencimien
 ## Actualización v0.4.4
 
 DEPEC sin local propio; mapas de las iglesias autorizados por CSP, resolución de enlaces cortos de Google Maps y conservación de su enlace original; insignias SVG centradas por cargo; tarjetas de miembros y testimonios compactas; calendario de cumpleaños separado con filtro por iglesia, navegación mensual, consentimiento público sin año ni edad y calendario privado sujeto a los permisos del padrón. Detalles en `ACTUALIZAR_v0.4.4.md`.
+
+## Actualización v0.4.5
+
+Collage de eventos en cuatro columnas con colocación calculada y rellenos decorativos sin enlaces ni fechas, adaptación a dos/una columnas y borde dorado para DEPEC en la portada general. DIRECTIVA DEPEC solo en esa portada; directorio de miembros reservado a las páginas de iglesias; mural de mensajes aprobados con autor y color de iglesia.

@@ -400,7 +400,7 @@ def test_member_profile_requires_approval_and_is_self_managed(client,app):
     client.post('/logout',data={'csrf':csrf});csrf=login(client)
     assert client.post('/panel/aprobaciones',data=dict(csrf=csrf,action='profile',id=uid,decision='Aprobado')).status_code==302
     assert message in client.get('/?group=3').get_data(as_text=True)
-    assert message in client.get('/').get_data(as_text=True)
+    assert message not in client.get('/').get_data(as_text=True)
     assert message not in client.get('/?group=2').get_data(as_text=True)
     client.post('/logout',data={'csrf':csrf})
     assert client.get(f'/miembros/{uid}/foto').status_code==200
@@ -765,3 +765,76 @@ def test_upgrade_adds_birthday_consent_without_publishing_existing_members(tmp_p
     app=create_app(dict(TESTING=True,DATABASE=str(path),UPLOAD_FOLDER=str(tmp_path/'uploads'),SECRET_KEY='test'))
     with sqlite3.connect(path) as db:assert db.execute('SELECT birthday_md,birthday_public,message,status FROM member_profiles WHERE user_id=1').fetchone()==('',0,'Mensaje conservado','Aprobado')
     assert 'Miembro real de prueba' not in app.test_client().get('/cumpleanos').get_data(as_text=True)
+
+# v0.4.5 — el collage rellena huecos sin inventar eventos.
+def test_collage_covers_every_cell_for_all_six_event_orientation_combinations():
+    from itertools import product
+    from app.collage import build_event_collage
+    for count in range(1,7):
+        for orientations in product(['portrait','landscape'],repeat=count):
+            events=[dict(id=i,d=dict(orientation=orientation)) for i,orientation in enumerate(orientations)]
+            collage=build_event_collage(events)
+            assert [tile['event']['id'] for tile in collage['events']]==list(range(count))
+            for columns in [4,2,1]:
+                occupied=set();all_cells=[item['placements'][columns] for item in collage['events']]
+                all_cells += [f for f in collage['fillers'] if f['layout']==columns]
+                for cell in all_cells:
+                    assert 1<=cell['column']<=columns and cell['column']+cell['columns']-1<=columns
+                    cells={(r,c) for r in range(cell['row'],cell['row']+cell['rows']) for c in range(cell['column'],cell['column']+cell['columns'])}
+                    assert not occupied.intersection(cells)
+                    occupied.update(cells)
+                height=max(r for r,c in occupied)
+                assert occupied=={(r,c) for r in range(1,height+1) for c in range(1,columns+1)}
+                for filler in collage['fillers']:
+                    assert (Path(__file__).parents[1]/'app'/'static'/filler['image']).is_file()
+    assert not build_event_collage([])['fillers']
+    assert len(build_event_collage([dict(id=i,d=dict(orientation='portrait')) for i in range(9)])['events'])==6
+
+
+def test_depec_home_has_own_directive_and_no_member_directory(client):
+    root=client.get('/').get_data(as_text=True)
+    church=client.get('/?group=3').get_data(as_text=True)
+    assert '<h2>DIRECTIVA <em>DEPEC</em></h2>' in root
+    assert 'id="miembros"' not in root and 'members-grid' not in root
+    assert 'id="miembros"' in church and 'members-grid' in church
+    assert '<h2>Conoce a nuestra <em>directiva.</em></h2>' in church
+    assert '<h2>DIRECTIVA <em>DEPEC</em></h2>' not in church
+    assert 'testimonials-grid message-collage' in root
+    assert 'Voces de nuestras <em>iglesias.</em>' in root
+
+
+def test_golden_depec_events_and_decorative_fillers_are_scoped(client,app):
+    from app.community_data import local_now
+    future=local_now()+timedelta(days=5)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("DELETE FROM media_files WHERE record_id IN (SELECT id FROM records WHERE module='events')")
+        db.execute("DELETE FROM participation")
+        db.execute("DELETE FROM records WHERE module='events'")
+        for gid in [1,3]:
+            data=payload();data.update(title='Encuentro dorado' if gid==1 else 'Encuentro de iglesia',date=future.isoformat(timespec='minutes'),end_date=(future+timedelta(hours=2)).isoformat(timespec='minutes'),card_layout='Vertical')
+            db.execute("INSERT INTO records(module,group_id,data,author_id,created,updated) VALUES('events',?,?,1,'2026-01-01','2026-01-01')",(gid,json.dumps(data)))
+    from html.parser import HTMLParser
+    class Tiles(HTMLParser):
+        def __init__(self):super().__init__();self.tiles=[];self.fillers=[]
+        def handle_starttag(self,tag,attrs):
+            a=dict(attrs)
+            if tag=='article' and 'data-placement' in a:self.tiles.append(a)
+            if tag=='figure' and 'collage-filler' in a.get('class',''):self.fillers.append(a)
+    root=Tiles();root.feed(client.get('/').get_data(as_text=True))
+    assert len(root.tiles)==2 and len([t for t in root.tiles if 'depec-gold-event' in t['class']])==1
+    assert root.fillers and all(f['aria-hidden']=='true' for f in root.fillers)
+    assert all('--row4:' in tile['style'] and '--row2:' in tile['style'] and '--row1:' in tile['style'] for tile in root.tiles)
+    church=Tiles();church.feed(client.get('/?group=3').get_data(as_text=True))
+    assert len(church.tiles)==1 and 'depec-gold-event' not in church.tiles[0]['class']
+
+
+def test_message_collage_preserves_church_and_moderation(client,app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        uid=db.execute("SELECT id FROM users WHERE email='miembro-10@demo.depec.local'").fetchone()[0]
+        for body,state in [('Saludo aprobado de Israel','Aprobado'),('Mensaje pendiente oculto','Pendiente')]:
+            db.execute('INSERT INTO community_messages(user_id,group_id,body,status,created) VALUES(?,2,?,?,?)',(uid,body,state,'2026-01-01'))
+    root=client.get('/').get_data(as_text=True)
+    assert 'Saludo aprobado de Israel' in root and 'Mensaje pendiente oculto' not in root
+    assert 'class="message-church">SEC Israel' in root and '--church:#' in root
+    assert 'Saludo aprobado de Israel' not in client.get('/?group=3').get_data(as_text=True)
+    assert 'Saludo aprobado de Israel' in client.get('/?group=2').get_data(as_text=True)
