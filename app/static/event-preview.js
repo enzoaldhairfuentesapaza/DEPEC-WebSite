@@ -39,7 +39,9 @@ document.querySelectorAll('[data-event-editor]').forEach(form => {
     card.querySelector('h3').textContent = value('title') || 'Tu próximo encuentro';
     card.querySelector('.event-description p').textContent = value('body') || 'La descripción de tu evento aparecerá aquí.';
     const start = value('date'), end = value('end_date');
+    field('date').required = field('end_date').required = value('status') !== 'Por programar';
     const format = raw => raw ? `${raw.slice(8,10)}/${raw.slice(5,7)}/${raw.slice(0,4)} · ${raw.slice(11,16)} h` : 'Fecha y hora por definir';
+    card.querySelector('.event-calendar-link').textContent = start && end ? 'Ver en calendario ↗' : 'Fecha por confirmar';
     const time = card.querySelector('time'); time.textContent = format(start); time.dateTime = start;
     card.querySelector('.event-description p:last-child').textContent = end ? `Hasta ${format(end)}` : 'Finalización por definir';
     const facts = card.querySelector('.event-facts-large');
@@ -47,7 +49,7 @@ document.querySelectorAll('[data-event-editor]').forEach(form => {
     if (!place) { place = document.createElement('p'); facts.append(place); }
     place.textContent = `⌖ ${value('location') || group.dataset.address || 'Lugar por confirmar'}`;
     let state = value('status');
-    if (state !== 'Cancelado') {
+    if (state !== 'Cancelado' && state !== 'Por programar') {
       if (['Realizado','Finalizado'].includes(state) || end && Date.parse(end+'-05:00') <= Date.now()) state = 'Finalizado';
       else if (state !== 'Reprogramado') state = start && Date.parse(start+'-05:00') <= Date.now() ? 'En curso' : 'Pronto';
     }
@@ -73,5 +75,18 @@ document.querySelectorAll('[data-event-editor]').forEach(form => {
     img.src = candidate;
   });
   window.addEventListener('pagehide', () => { if (objectUrl) URL.revokeObjectURL(objectUrl); });
-  update();
+  const venue = form.querySelector('[data-venue-picker]');
+  const applyVenue = () => {
+    if (!venue) return;
+    const location = field('location');
+    if (venue.value) location.value = venue.selectedOptions[0].dataset.address || '';
+    location.readOnly = Boolean(venue.value); update();
+  };
+  venue?.addEventListener('change',applyVenue);
+  field('group_id').addEventListener('change',applyVenue);
+  field('attachment').addEventListener('change',() => {
+    const note=form.querySelector('[data-file-name]');
+    if(note) note.textContent=field('attachment').files[0]?.name || 'Sin archivo: puedes continuar sin imagen.';
+  });
+  applyVenue(); update();
 });

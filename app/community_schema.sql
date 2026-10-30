@@ -4,3 +4,6 @@ CREATE INDEX IF NOT EXISTS media_organization ON media_files(group_id,created);
 CREATE TABLE IF NOT EXISTS memberships(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),group_id INTEGER NOT NULL REFERENCES groups(id),status TEXT NOT NULL DEFAULT 'Pendiente',created TEXT NOT NULL,reviewed_by INTEGER REFERENCES users(id),reviewed TEXT);
 CREATE TABLE IF NOT EXISTS community_messages(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),group_id INTEGER NOT NULL REFERENCES groups(id),body TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Pendiente',created TEXT NOT NULL,reviewed_by INTEGER REFERENCES users(id),reviewed TEXT);
 CREATE TABLE IF NOT EXISTS leader_profiles(user_id INTEGER NOT NULL REFERENCES users(id),group_id INTEGER NOT NULL REFERENCES groups(id),message TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL DEFAULT '',photo TEXT NOT NULL DEFAULT '',published INTEGER NOT NULL DEFAULT 0,featured INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,group_id));
+
+CREATE TABLE IF NOT EXISTS test_operators(user_id INTEGER PRIMARY KEY REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS test_personas(operator_id INTEGER NOT NULL REFERENCES test_operators(user_id),group_id INTEGER NOT NULL REFERENCES groups(id),role TEXT NOT NULL,user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),PRIMARY KEY(operator_id,group_id,role));

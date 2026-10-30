@@ -98,7 +98,7 @@ def test_create_edit_delete_event_and_audit(client,app):
     assert 'Prueba funcional' in client.get('/calendar').get_data(as_text=True)
     data['title']='Evento actualizado'
     assert client.post(f'/manage/events/{rid}/edit',data=data).status_code==302
-    assert 'Evento actualizado' in client.get('/manage/events').get_data(as_text=True)
+    assert 'Evento actualizado' in client.get('/manage/events?group=2').get_data(as_text=True)
     assert client.post(f'/records/{rid}/delete',data={'csrf':csrf}).status_code==302
     assert 'Eliminó events' in client.get('/audit').get_data(as_text=True)
 
@@ -131,7 +131,7 @@ def test_future_draft_internal_posts_not_public(client,app):
     base.update(visibility='public',date=(date.today()+timedelta(days=10)).isoformat()+'T10:00'); client.post('/manage/posts/new',data=base)
     assert 'NO DEBE SER PUBLICO' not in client.get('/').get_data(as_text=True)
 
-def test_attendance_capacity_and_foreign_member(client,app):
+def test_attendance_without_capacity_and_foreign_member(client,app):
     csrf=login(client)
     data=payload(); data['csrf']=csrf; client.post('/manage/events/new',data=data)
     with sqlite3.connect(app.config['DATABASE']) as db:
@@ -139,7 +139,7 @@ def test_attendance_capacity_and_foreign_member(client,app):
         ids=[r[0] for r in db.execute("SELECT id FROM records WHERE module='members' AND group_id=2 LIMIT 2")]
     url=f'/participation/{event}'
     assert client.post(url,data=dict(csrf=csrf,member_id=ids[0],status='Inscrito')).status_code==302
-    assert client.post(url,data=dict(csrf=csrf,member_id=ids[1],status='Inscrito')).status_code==400
+    assert client.post(url,data=dict(csrf=csrf,member_id=ids[1],status='Inscrito')).status_code==302
     assert client.post(url,data=dict(csrf=csrf,member_id=record(app,'members',3),status='Presente')).status_code==400
 
 def test_csv_formula_protection(client,app):
@@ -1011,3 +1011,148 @@ def test_depec_leaders_manage_palette_and_church_cannot_change_it(client,app):
     assert other.post('/panel/identidad',data=dict(csrf=csrf2,group_id=2,color='#ffffff',hero_title='Nuestra identidad',verse_mode='daily')).status_code==302
     with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT color FROM groups WHERE id=2').fetchone()[0]==before
     assert client.post('/panel/colores',data=dict(group_id=3,color='#ffffff')).status_code==400
+
+# v0.5.0 — laboratorio global con permisos reales por identidad.
+def test_global_tester_switches_roles_without_leaking_admin_access(client,app):
+    response=client.post('/login',data=dict(csrf=token(client),email='pruebas@depec.demo',password='DepecPruebas2026!'))
+    assert response.status_code==302
+    assert 'data-role-lab' in client.get('/panel').get_data(as_text=True)
+    def switch(role,gid):
+        with client.session_transaction() as s:csrf=s['csrf']
+        result=client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role=role,group_id=gid))
+        assert result.status_code==302
+        return result
+    switch('Secretario',3)
+    assert client.get('/manage/members/new?group=3').status_code==200
+    assert client.get('/manage/finance/new?group=3').status_code==403
+    foreign=record(app,'members',2)
+    assert client.get(f'/manage/members/{foreign}/edit').status_code==403
+    assert 'data-role-lab' in client.get('/manage/finance/new').get_data(as_text=True)
+    assert client.get('/panel/colores').status_code==403
+    with client.session_transaction() as s:
+        secretary=s['uid'];operator=s['test_operator']
+        assert secretary!=operator
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT admin FROM users WHERE id=?',(secretary,)).fetchone()[0]==0
+    switch('Tesorero',3)
+    assert client.get('/manage/finance/new?group=3').status_code==200
+    assert client.get('/manage/members/new?group=3').status_code==403
+    switch('Vocal',3)
+    assert client.get('/manage/events/new?group=3').status_code==403
+    switch('Presidente',3)
+    assert client.get('/manage/finance/new?group=3').status_code==200
+    assert client.get(f'/manage/members/{foreign}/edit').status_code==403
+    switch('Presidente',1)
+    assert client.get(f'/manage/members/{foreign}/edit').status_code==200
+    assert client.get('/panel/colores').status_code==200
+    switch('Administrador',1)
+    with client.session_transaction() as s:assert s['uid']==operator
+    assert client.get('/manage/finance/new').status_code==200
+
+
+def test_tester_member_and_visitor_can_always_return_to_admin(client,app):
+    client.post('/login',data=dict(csrf=token(client),email='pruebas@depec.demo',password='DepecPruebas2026!'))
+    def switch(role,gid):
+        with client.session_transaction() as s:csrf=s['csrf']
+        return client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role=role,group_id=gid))
+    assert switch('Miembro',3).status_code==302
+    assert client.get('/mi-comunidad').status_code==200
+    assert client.get('/mi-perfil').status_code==200
+    assert client.get('/manage/finance').status_code==403
+    assert 'data-role-lab' in client.get('/manage/finance').get_data(as_text=True)
+    assert switch('Visitante',3).status_code==302
+    with client.session_transaction() as s:assert s['uid'] is None and s['test_operator']
+    page=client.get('/?group=3').get_data(as_text=True)
+    assert 'data-role-lab' in page
+    assert client.get('/manage/members').status_code==302
+    assert client.get('/albumes?group=3').headers['Cache-Control']=='no-store'
+    assert switch('Administrador',1).status_code==302
+    assert client.get('/manage/finance/new').status_code==200
+    with client.session_transaction() as s:csrf=s['csrf']
+    client.post('/logout',data=dict(csrf=csrf))
+    assert 'data-role-lab' not in client.get('/').get_data(as_text=True)
+    assert client.post('/pruebas/cambiar-rol',data=dict(csrf=token(client),role='Administrador',group_id=1)).status_code==403
+
+
+def test_test_switcher_is_not_available_to_normal_accounts_and_validates_requests(client,app):
+    csrf=login(client)
+    assert 'data-role-lab' not in client.get('/panel').get_data(as_text=True)
+    assert client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role='Administrador',group_id=1)).status_code==403
+    client.post('/login',data=dict(csrf=csrf,email='pruebas@depec.demo',password='DepecPruebas2026!'))
+    with client.session_transaction() as s:csrf=s['csrf'];operator=s['uid']
+    assert client.post('/pruebas/cambiar-rol',data=dict(role='Presidente',group_id=3)).status_code==400
+    for role,gid in [('Inventado',3),('Presidente',999)]:
+        assert client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role=role,group_id=gid)).status_code==400
+    assert client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role='Miembro',group_id=1)).status_code==302
+    with client.session_transaction() as s:assert s['uid']==operator
+    assert client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role='Secretario',group_id=3)).status_code==302
+    assert client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role='Administrador',group_id=1)).status_code==400
+
+
+def test_test_personas_are_reused_and_operator_deactivation_ends_authority(client,app):
+    client.post('/login',data=dict(csrf=token(client),email='pruebas@depec.demo',password='DepecPruebas2026!'))
+    ids=[]
+    for role in ['Secretario','Tesorero','Secretario']:
+        with client.session_transaction() as s:csrf=s['csrf'];operator=s['test_operator']
+        assert client.post('/pruebas/cambiar-rol',data=dict(csrf=csrf,role=role,group_id=3)).status_code==302
+        with client.session_transaction() as s:ids.append(s['uid'])
+    assert ids[0]==ids[2] and ids[0]!=ids[1]
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT count(*) FROM assignments WHERE user_id=? AND active=1',(ids[0],)).fetchone()[0]==1
+        db.execute('UPDATE users SET active=0 WHERE id=?',(operator,))
+    assert client.get('/manage/members').status_code==302
+    assert 'data-role-lab' not in client.get('/').get_data(as_text=True)
+    with client.session_transaction() as s:assert 'test_operator' not in s
+
+
+def test_test_account_is_not_created_implicitly_on_real_install(tmp_path):
+    from app.role_lab import create_test_operator
+    path=tmp_path/'real.sqlite'
+    with sqlite3.connect(path) as db:
+        db.executescript((Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8'))
+        db.execute("INSERT INTO users(name,email,password) VALUES('Cuenta real','pruebas@depec.demo','hash-conservado')")
+        db.commit()
+        assert create_test_operator(db,demo_only=True) is False
+        assert create_test_operator(db) is False
+        assert db.execute('SELECT admin,password FROM users').fetchone()==(0,'hash-conservado')
+        assert db.execute('SELECT count(*) FROM test_operators').fetchone()[0]==0
+
+
+def test_event_defaults_follow_effective_organization(client,app):
+    login(client,'israel@depec.demo')
+    page=client.get('/manage/events/new').get_data(as_text=True)
+    from html.parser import HTMLParser
+    class Selected(HTMLParser):
+        def __init__(self):super().__init__();self.select='';self.values={}
+        def handle_starttag(self,tag,attrs):
+            attrs=dict(attrs)
+            if tag=='select':self.select=attrs.get('name','')
+            if tag=='option' and 'selected' in attrs:self.values[self.select]=attrs.get('value')
+    selected=Selected();selected.feed(page)
+    assert selected.values['group_id']=='2'
+    selected=Selected();selected.feed(client.get('/manage/events').get_data(as_text=True))
+    assert selected.values['group']=='2'
+    with client.session_transaction() as s:csrf=s['csrf']
+    client.post('/login',data=dict(csrf=csrf,email='presidencia@depec.demo',password='DepecDemo2026!'))
+    selected=Selected();selected.feed(client.get('/manage/events/new').get_data(as_text=True));assert selected.values['group_id']=='1'
+    assert 'name="capacity"' not in page and 'name="media_kind"' not in page and 'name="event_address"' not in page
+    assert 'format-switch' in page and 'data-venue-picker' in page and 'event-editor-grid' in page
+
+
+def test_pending_event_without_dates_and_church_venue(client,app):
+    csrf=login(client)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("UPDATE groups SET address='Calle de prueba 123',maps_url='https://maps.app.goo.gl/local' WHERE id=3")
+    data=payload();data.update(csrf=csrf,group_id='1',status='Por programar',date='',end_date='',location='Ignorado',venue_group='3',event_address='No usar dirección anterior')
+    assert client.post('/manage/events/new',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        rid,raw=db.execute("SELECT id,data FROM records WHERE module='events' ORDER BY id DESC LIMIT 1").fetchone();stored=json.loads(raw)
+    assert stored['location']==stored['event_address']=='Calle de prueba 123' and 'capacity' not in stored
+    assert stored['location_maps_url']=='https://maps.app.goo.gl/local'
+    page=client.get(f'/events/{rid}/preview').get_data(as_text=True)
+    assert 'Por programar' in page and 'Fecha y hora por confirmar' in page and 'maps.app.goo.gl/local' in page
+    data.update(status='Programado')
+    assert client.post('/manage/events/new',data=data).status_code==200
+    assert client.get(f'/events/{rid}/preview').status_code==200
+    other=app.test_client();login(other,'israel@depec.demo')
+    assert other.get(f'/events/{rid}/preview').status_code==403
+    assert client.get('/manage/events?group=1&status=Por+programar').status_code==200

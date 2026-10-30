@@ -40,3 +40,6 @@ def seed(db):
     from .retro_demo import seed_visual_demo,seed_birthday_demo
     seed_visual_demo(db)
     seed_birthday_demo(db)
+
+    from .role_lab import create_test_operator
+    create_test_operator(db,demo_only=True)

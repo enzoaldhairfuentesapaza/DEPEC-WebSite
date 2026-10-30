@@ -26,3 +26,22 @@ MODULES['events']['fields'].extend([
     f('image_mode','Imagen de la tarjeta','select',['Imagen propia','Sin imagen','Imagen genérica'],required=False),
     f('generic_image','Imagen genérica del sistema','select',['Encuentro','Comunidad','Servicio'],required=False),
 ])
+
+# Ayudas de los formularios, compartidas por todas las secciones.
+HELP={'title':'Escribe un nombre claro para reconocer este registro.','body':'Explica los detalles que necesita conocer la comunidad.','date':'Selecciona la fecha y, cuando corresponda, la hora de inicio (hora de Perú).','end_date':'Indica la fecha y hora en que termina la actividad (hora de Perú).','location':'Escribe el lugar y su dirección, o elige el local de una iglesia.','visibility':'Pública: visible para visitantes. Interna: solo para líderes autorizados.','status':'Indica en qué etapa se encuentra este registro.','attachment':'El archivo es opcional. Puedes guardar sin adjuntar una imagen. PNG o JPG, máximo 10 MB por solicitud.','card_layout':'Automático respeta la imagen. También puedes elegir vertical u horizontal.','image_mode':'Elige una imagen propia, una del sistema o una tarjeta solo con información.','generic_image':'Selecciona la ilustración del sistema que prefieras.'}
+MODULES['events']['fields']=[field for field in MODULES['events']['fields'] if field['key'] not in ['event_address','capacity','media_kind']]
+for field in MODULES['events']['fields']:
+    if field['key']=='location':field['label']='Lugar y dirección'
+    if field['key'] in ['date','end_date']:field['required']=False
+    if field['key']=='status':field['options']=['Programado','Por programar','Reprogramado','Realizado','Finalizado','Cancelado']
+for config in MODULES.values():
+    for field in config['fields']:
+        field['help']=HELP.get(field['key'], 'Elige una de las opciones disponibles.' if field['kind']=='select' else 'Indica el importe en soles, con hasta dos decimales.' if field['kind']=='money' else 'Completa este dato para mantener el registro organizado.')
+DATE_HELP={'events':'Elige el día y la hora de inicio en Perú. Si aún no están definidos, usa el estado Por programar.','members':'Selecciona la fecha de nacimiento del miembro. Este dato pertenece al padrón privado.','documents':'Fecha que corresponde al documento, acta o credencial.','finance':'Fecha en que se recibió el ingreso o se realizó el gasto.','plans':'Fecha prevista para realizar esta actividad del plan.','meetings':'Día y hora de la reunión, con la hora de Perú.','announcements':'Día y hora de Perú a partir de los que se mostrará el anuncio.','gallery':'Fecha en que se tomó la fotografía o se realizó el encuentro.','tasks':'Fecha límite para completar la tarea.','requests':'Último día para presentar el documento solicitado.'}
+for key,config in MODULES.items():
+    for field in config['fields']:
+        if field['key']=='date':field['help']=DATE_HELP.get(key,'Fecha correspondiente al registro.')
+        if field['key']=='attachment' and key not in ['events','posts','gallery']:field['help']='Archivo opcional: PDF, DOCX, XLSX, PNG o JPG. Máximo 10 MB por solicitud.'
+        if field['key']=='attachment' and key=='gallery':field['help']='Adjunta la fotografía del registro en PNG o JPG. Máximo 10 MB.'
+        if field['key']=='end_date' and key=='announcements':field['help']='Día y hora de Perú en que el anuncio se ocultará automáticamente.'
+        if field['key']=='status' and key=='events':field['help']='Programado: fechas confirmadas. Por programar: todavía sin fecha definitiva. Reprogramado: hubo un cambio de fecha.'

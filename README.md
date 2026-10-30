@@ -1,6 +1,6 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.5.0 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.5.1 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
 
 ## Funciones del sistema
 
@@ -12,6 +12,7 @@ Prototipo funcional v0.5.0 para la DEPEC y sus SEC/GJ. Construido con **Flask, J
 - Collage de hasta seis eventos en cuatro columnas, orientación automática o manual, imágenes opcionales/genéricas y vista previa.
 - Rellenos decorativos adaptados a su orientación y destacados de eventos DEPEC en rojo.
 - Calendario de eventos con detalle lateral e historial de actividades finalizadas.
+- Formulario de eventos guiado, con vista previa a la derecha, ubicación unificada y selección de local por iglesia; listado filtrado por organización y acciones Ver tarjeta, Editar y Asistencia.
 - Tablón de anuncios con programación, prioridades y cuenta regresiva; se oculta cuando está vacío.
 - Álbumes con aportes de líderes, atribución de fotografías, tres álbumes recientes en portada y directorio con búsqueda y paginación.
 - Visor de imágenes al hacer clic, navegación y tamaño original, sin botones visibles sobre las fotos.
@@ -21,6 +22,7 @@ Prototipo funcional v0.5.0 para la DEPEC y sus SEC/GJ. Construido con **Flask, J
 - Gestión privada de miembros, bautismo, asistencia, cargos y permisos por organización.
 - Secretaría, credenciales, documentos, planes de trabajo, reuniones y tareas.
 - Tesorería con ingresos, egresos, comprobantes y reportes.
+- El panel no muestra el módulo incompleto de Publicaciones; se mantienen eventos, anuncios y mensajes aprobados.
 - Autenticación, permisos, protección CSRF, historial de acciones y copias de seguridad.
 - Cuenta global de pruebas con selector de iglesia y rol, incluidos Administrador, Miembro y Visitante.
 
@@ -74,7 +76,7 @@ Todas usan la contraseña **`DepecDemo2026!`**. Estos usuarios se crean exclusiv
 | admin@depec.demo | Administración completa, cuentas, grupos, cargos y permisos adicionales |
 | presidencia@depec.demo | Presidencia DEPEC: información consolidada y gestión de todos los grupos |
 | israel@depec.demo | Presidencia de SEC Israel, únicamente ese grupo |
-| secretaria@depec.demo | Secretaría de SEC Israel; padrón, documentos, eventos y publicaciones |
+| secretaria@depec.demo | Secretaría de SEC Israel; padrón, documentos, eventos y anuncios |
 | tesoreria@depec.demo | Tesorería de SEC Israel; movimientos financieros y lectura de actividades |
 | vocal@depec.demo | Lectura de actividades de SEC Israel; sin padrón, documentos ni tesorería |
 
@@ -85,7 +87,7 @@ Los integrantes, montos y actividades son ficticios. Las descripciones y horario
 - **Página pública:** directorio de los seis grupos, página por grupo, calendario público, noticias, afiches y galería.
 - **Panel privado:** resumen de miembros, encuentros, saldo aprobado, tareas y entregas pendientes.
 - **Calendario:** vista mensual, navegación entre meses, filtros y colores por organización; eventos de varios días y detalles desplegables.
-- **Eventos y publicaciones:** crear, consultar, editar y eliminar; borradores, visibilidad pública/interna, fechas, estado y afiches. Una noticia publicada con fecha futura aparece automáticamente cuando llega su fecha, al consultar la página.
+- **Eventos:** crear, consultar, editar y eliminar, con organización predeterminada según el cargo, ayudas en los campos y vista previa lateral. Estado Programado o Por programar, ubicación manual o local de iglesia, imagen opcional y orientación automática/vertical/horizontal mediante selector segmentado.
 - **Miembros:** padrón privado, bautismo, contacto, apoderado, fechas, estado y observaciones.
 - **Cumpleaños:** listado privado mensual. El indicador de compartir se registra, pero no publica cumpleaños en la web.
 - **Secretaría:** actas, credenciales, planes, informes, archivos privados y estados documentales.
@@ -93,9 +95,9 @@ Los integrantes, montos y actividades son ficticios. Las descripciones y horario
 - **Tesorería:** ingresos/egresos en PEN, efectivo/banco, categorías, comprobantes, relación con evento, aprobación y saldo acumulado de movimientos aprobados.
 - **Plan de trabajo:** actividades, objetivos, responsable, presupuesto, periodo y avance.
 - **Reuniones y tareas:** agenda, acuerdos escritos, responsables, vencimiento y estados.
-- **Asistencia e inscripciones internas:** registro por miembro del grupo anfitrión; cupos controlados al inscribir. No hay registro público de visitantes.
+- **Asistencia e inscripciones internas:** registro por miembro del grupo anfitrión; sin límite de cupos. No hay registro público de visitantes.
 - **Organización:** crear/editar grupos, crear/desactivar usuarios, asignar cargos por periodo y finalizar cargos conservando el historial. Admite varios vocales y varios cargos por persona.
-- **Permisos adicionales:** administrador concede lectura o edición de un módulo, por grupo; por ejemplo, permitir publicaciones a un vocal. Son aditivos a los permisos del cargo.
+- **Permisos adicionales:** administrador concede lectura o edición de un módulo, por grupo; por ejemplo, permitir anuncios a un vocal. Son aditivos a los permisos del cargo.
 - **Reportes:** cifras acumuladas por organización, CSV para Excel e impresión/guardar PDF desde el navegador.
 - **Cuenta:** cambio de contraseña y cierre de sesión.
 - **Historial:** creación, cambios, eliminaciones y administración registrados con usuario y fecha.
@@ -110,7 +112,7 @@ Los integrantes, montos y actividades son ficticios. Las descripciones y horario
 6. Registra un ingreso pendiente: no suma al saldo. Cámbialo a aprobado y comprueba el reporte.
 7. Abre Asistencia desde un evento e inscribe a un miembro.
 8. Cierra sesión e ingresa como tesorería: no podrá acceder al padrón de Israel ni gestionar otros grupos.
-9. Como administrador, concede edición de publicaciones a un vocal y prueba esa cuenta.
+9. Como administrador, concede edición de anuncios a un vocal y prueba esa cuenta.
 
 ## Estructura
 
@@ -154,7 +156,7 @@ Esta matriz es una propuesta inicial, no un reglamento oficial. Los periodos se 
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-En Linux usa `.venv/bin/python`. Las pruebas crean bases temporales independientes. Cubren páginas, autenticación, CSRF, aislamiento, roles, CRUD, documentos, calendario, cupos, CSV y cambios de cuenta. No equivalen a una auditoría de seguridad ni a validación visual en todos los dispositivos.
+En Linux usa `.venv/bin/python`. Las pruebas crean bases temporales independientes. Cubren páginas, autenticación, CSRF, aislamiento, roles, CRUD, documentos, calendario, asistencia, CSV y cambios de cuenta. No equivalen a una auditoría de seguridad ni a validación visual en todos los dispositivos.
 
 ## Copias de seguridad
 

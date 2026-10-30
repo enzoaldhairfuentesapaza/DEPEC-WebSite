@@ -149,6 +149,7 @@ def event_presentation(data,group,at=None):
     result=dict(data)
     end=result.get('end_date') or result.get('date','')
     if result.get('status')=='Cancelado':state='Cancelado'
+    elif result.get('status')=='Por programar' or not result.get('date'):state='Por programar'
     elif result.get('status') in ['Realizado','Finalizado'] or end and end < (at or local_now()).isoformat(timespec='seconds'):state='Finalizado'
     elif result.get('status')=='Reprogramado':state='Reprogramado'
     elif result.get('date','') <= (at or local_now()).isoformat(timespec='seconds'):state='En curso'
@@ -176,6 +177,7 @@ def event_presentation(data,group,at=None):
     result['maps_link']='https://www.google.com/maps/search/?'+urlencode({'api':1,'query':address}) if address and 'por confirmar' not in address.lower() and 'ejemplo' not in address.lower() else ''
     if not umbrella and result.get('event_address','') in ['',group['address']] and result['location']==group['address'] and group['maps_url']:
         result['maps_link']=group['maps_url']
+    if result.get('location_maps_url'):result['maps_link']=result['location_maps_url']
     return result
 
 # Textos breves de Reina-Valera 1909 (dominio público), sin servicio externo.

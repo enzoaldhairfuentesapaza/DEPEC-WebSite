@@ -22,6 +22,7 @@ from .community import register_community
 from .announcements import announcement_state
 from .collage import build_event_collage
 from .contact import public_contact
+from .role_lab import TEST_ROLES,create_test_operator,operator_for_session,persona_for
 
 
 def create_app(test_config=None):
@@ -42,6 +43,7 @@ def create_app(test_config=None):
             from .retro_demo import seed_visual_demo,seed_birthday_demo
             seed_visual_demo(connection)
             seed_birthday_demo(connection)
+            create_test_operator(connection,demo_only=True)
             if not app.config.get('TESTING'):
                 from .map_locations import sync_short_maps
                 sync_short_maps(connection)
@@ -129,12 +131,14 @@ def create_app(test_config=None):
 
     @app.before_request
     def before():
+        g.test_operator=operator_for_session(db(),session)
+        if session.get('test_operator') and not g.test_operator:session.clear()
         g.user=db().execute('SELECT * FROM users WHERE id=? AND active=1',(session.get('uid'),)).fetchone() if session.get('uid') else None
         if request.endpoint!='static':
             completed=False
             for row in db().execute("SELECT id,data FROM records WHERE module='events'").fetchall():
                 data=json.loads(row['data'])
-                if data.get('status') not in ['Cancelado','Finalizado'] and data.get('end_date') and data['end_date']<now():
+                if data.get('status') not in ['Cancelado','Finalizado','Por programar'] and data.get('end_date') and data['end_date']<now():
                     data['previous_status']=data.get('status'); data['status']='Finalizado'
                     db().execute('UPDATE records SET data=?,updated=? WHERE id=?',(json.dumps(data),now(),row['id']))
                     db().execute('INSERT INTO audit(action,created,group_id) SELECT ?,?,group_id FROM records WHERE id=?',('Sistema: finalizó evento #'+str(row['id']),now(),row['id']));completed=True
@@ -150,7 +154,7 @@ def create_app(test_config=None):
         response.headers['X-Frame-Options']='DENY'
         response.headers['Referrer-Policy']='same-origin'
         response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src https://www.google.com https://maps.google.com https://google.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-        if g.get('user') or request.endpoint in ['public','retro.public_birthday_calendar']:
+        if g.get('user') or g.get('test_operator') or request.endpoint in ['public','retro.public_birthday_calendar']:
             response.headers['Cache-Control']='no-store'
         return response
 
@@ -166,7 +170,7 @@ def create_app(test_config=None):
             member_scope=db().execute("SELECT group_id FROM memberships WHERE user_id=? AND status='Aprobado'",(g.user['id'],)).fetchone()
             if member_scope:scope=member_scope['group_id']
         brand_group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(contact_widget=public_contact(brand_group),build_event_collage=build_event_collage,contrast_color=contrast_color,brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],can_manage_palette=community['can_manage_palette'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
+        return dict(test_operator=g.get('test_operator'),test_roles=TEST_ROLES,test_role=session.get('test_role','Administrador'),test_group=session.get('test_group',1),contact_widget=public_contact(brand_group),build_event_collage=build_event_collage,contrast_color=contrast_color,brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],can_manage_palette=community['can_manage_palette'],demo_mode=demo_mode,modules=MODULES,navigation_modules={k:v for k,v in MODULES.items() if k!='posts'}, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
 
     @app.route('/')
     def public():
@@ -188,10 +192,32 @@ def create_app(test_config=None):
             if user and check_password_hash(user['password'],request.form.get('password','')):
                 db().execute('DELETE FROM attempts WHERE email=?',(email,)); db().commit()
                 session.clear(); session['uid']=user['id']; session['csrf']=secrets.token_urlsafe(32); session.permanent=True
+                if db().execute('SELECT 1 FROM test_operators WHERE user_id=?',(user['id'],)).fetchone():
+                    session['test_operator']=user['id'];session['test_role']='Administrador';session['test_group']=1
                 return redirect(url_for('dashboard'))
             db().execute('INSERT INTO attempts VALUES(?,?)',(email,time.time())); db().commit()
             flash('Correo o contraseña incorrectos.','error')
         return render_template('login.html',public_page=True)
+
+    @app.post('/pruebas/cambiar-rol')
+    def switch_test_role():
+        operator=g.get('test_operator')
+        if not operator:abort(403)
+        role=request.form.get('role','');gid=request.form.get('group_id',type=int)
+        group=db().execute('SELECT * FROM groups WHERE id=? AND active=1',(gid,)).fetchone()
+        if role not in TEST_ROLES or not group:abort(400)
+        if role=='Miembro' and group['kind']=='DEPEC':
+            flash('Para probar como miembro, selecciona una SEC o GJ.','error')
+            return redirect(url_for('public'))
+        if role=='Administrador':uid=operator['id']
+        elif role=='Visitante':uid=None
+        else:uid=persona_for(db(),operator['id'],group,role)
+        db().execute('INSERT INTO audit(user_id,group_id,action,created) VALUES(?,?,?,?)',(operator['id'],gid,'Pruebas: cambió a '+role+' · '+group['name'],now()));db().commit()
+        session['uid']=uid;session['test_role']=role;session['test_group']=gid
+        session['csrf']=secrets.token_urlsafe(32)
+        if role=='Visitante':return redirect(url_for('public',group=gid if gid!=1 else ''))
+        if role=='Miembro':return redirect(url_for('community.member_home'))
+        return redirect(url_for('dashboard',group=gid if role!='Administrador' else ''))
 
     @app.post('/logout')
     def logout():
@@ -208,7 +234,7 @@ def create_app(test_config=None):
         balance=sum((Decimal(r['d'].get('amount','0'))*(1 if r['d'].get('category')=='Ingreso' else -1) for r in money if r['d'].get('status')=='Aprobado'),Decimal(0))
         upcoming=sorted([r for r in events if r['d'].get('date','')[:10]>=date.today().isoformat() and r['d'].get('status')!='Cancelado'], key=lambda r:r['d']['date'])
         pending=[r for r in records('requests',scope)+records('tasks',scope) if r['d'].get('status') in ['Pendiente','Observado','En proceso']]
-        return render_template('dashboard.html',members=members,events=upcoming,money=money,balance=balance,pending=pending,posts=records('posts',scope)[:3])
+        return render_template('dashboard.html',members=members,events=upcoming,money=money,balance=balance,pending=pending)
 
     @app.get('/calendar')
     def calendar_view():
@@ -239,15 +265,32 @@ def create_app(test_config=None):
         except (ValueError,OverflowError):abort(400)
         return render_template('birthdays.html',public_page=False,**calendar_data)
 
+    def default_event_group():
+        if g.get('test_operator') and session.get('test_group') and allowed(session['test_group'],'events'):return session['test_group']
+        if g.user['admin']:return 1
+        row=db().execute('SELECT group_id FROM assignments WHERE user_id=? AND active=1 ORDER BY CASE WHEN group_id=1 THEN 0 ELSE 1 END,id LIMIT 1',(g.user['id'],)).fetchone()
+        return row['group_id'] if row else 1
+
+    @app.get('/events/<int:record_id>/preview')
+    @logged
+    def event_preview(record_id):
+        item=get_record(record_id)
+        if item['module']!='events' or not allowed(item['group_id'],'events'):abort(403)
+        group=db().execute('SELECT * FROM groups WHERE id=?',(item['group_id'],)).fetchone()
+        item.update(group_name=group['name'],color=group['color'],d=event_presentation(item['d'],group))
+        return render_template('event_detail.html',event=item)
+
     @app.get('/manage/<module>')
     @logged
     def listing(module):
         if module not in MODULES: abort(404)
-        items=records(module,request.args.get('group',type=int))
+        scope=request.args.get('group',type=int)
+        if module=='events' and 'group' not in request.args:scope=default_event_group()
+        items=records(module,scope)
         q=request.args.get('q','').casefold()
         status=request.args.get('status','')
-        items=[r for r in items if q in ' '.join(str(v) for k,v in r['d'].items() if k!='attachment').casefold() and (not status or r['d'].get('status')==status)]
-        return render_template('listing.html',module=module,config=MODULES[module],items=items)
+        items=[r for r in items if q in ' '.join(str(v) for k,v in r['d'].items() if k!='attachment').casefold() and (not status or r['d'].get('display_status',r['d'].get('status'))==status or r['d'].get('status')==status)]
+        return render_template('listing.html',module=module,config=MODULES[module],items=items,current_scope=scope or '')
 
     def validate(module, group_id, existing=None):
         data=dict(existing or {})
@@ -278,7 +321,18 @@ def create_app(test_config=None):
         if module=='events':
             group=db().execute('SELECT * FROM groups WHERE id=?',(group_id,)).fetchone()
             if not data.get('location'):data['location']=group['address'] if group['kind']!='DEPEC' else 'Sede por confirmar'
-            if not data.get('event_address'):data['event_address']=data.get('location') or (group['address'] if group['kind']!='DEPEC' else '')
+            venue=request.form.get('venue_group',type=int)
+            data['location_maps_url']=''
+            data['venue_group']=venue or ''
+            if venue:
+                church=db().execute("SELECT * FROM groups WHERE id=? AND active=1 AND kind!='DEPEC'",(venue,)).fetchone()
+                if not church or not church['address']:raise ValueError('La iglesia seleccionada todavía no tiene dirección.')
+                data['location']=church['address'];data['location_maps_url']=church['maps_url']
+            data['event_address']=data['location']
+            data.pop('capacity',None)
+            if data['status']!='Por programar' and (not data.get('date') or not data.get('end_date')):raise ValueError('Indica inicio y finalización, o selecciona Por programar.')
+            for key in ['date','end_date']:
+                if data.get(key) and datetime.fromisoformat(data[key]).tzinfo:raise ValueError('Usa la hora local de Perú.')
             data['media_kind']=data.get('media_kind') or 'Afiche'
         if module=='events' and data['end_date']<data['date']: raise ValueError('La finalización debe ser posterior al inicio.')
         if module=='members' and data['date']>date.today().isoformat(): raise ValueError('La fecha de nacimiento no puede ser futura.')
@@ -315,6 +369,8 @@ def create_app(test_config=None):
         if module=='events':
             for key,default in [('card_layout','Automático'),('image_mode','Imagen propia'),('generic_image','Encuentro')]:data.setdefault(key,default)
         group_id=item['group_id'] if item else request.args.get('group',type=int)
+        if module=='events' and group_id is None:group_id=default_event_group()
+        if module=='events':data.setdefault('status','Programado')
         if request.method=='POST':
             try:
                 submitted=int(request.form.get('group_id','0'))
@@ -344,7 +400,7 @@ def create_app(test_config=None):
         preview_event=None
         if module=='events':
             preview_group=next((gr for gr in writable if gr['id']==group_id),writable[0])
-            preview_data={**data,'title':data.get('title') or 'Tu próximo encuentro','body':data.get('body') or 'La descripción de tu evento aparecerá aquí.','date':data.get('date') or now()[:16],'end_date':data.get('end_date') or now()[:16]}
+            preview_data={**data,'title':data.get('title') or 'Tu próximo encuentro','body':data.get('body') or 'La descripción de tu evento aparecerá aquí.','date':data.get('date') or '','end_date':data.get('end_date') or ''}
             preview_event=dict(id=record_id or 0,group_id=preview_group['id'],group_name=preview_group['name'],color=preview_group['color'],d=event_presentation(preview_data,preview_group))
         return render_template('edit.html',module=module,config=MODULES[module],item=item,data=data,writable=writable,selected_group=group_id,event_options=records('events'),preview_event=preview_event)
 
@@ -406,10 +462,6 @@ def create_app(test_config=None):
             member_id=request.form.get('member_id',type=int)
             status=request.form.get('status')
             if status not in ['Inscrito','Presente','Ausente','Justificado'] or member_id not in [r['id'] for r in members]: abort(400)
-            if status=='Inscrito' and item['module']=='events':
-                cap=int(item['d'].get('capacity') or 0)
-                count=db().execute('SELECT count(*) FROM participation WHERE record_id=? AND member_id<>? AND status IN (\'Inscrito\',\'Presente\')',(record_id,member_id)).fetchone()[0]
-                if cap and count>=cap: abort(400,'No hay cupos disponibles.')
             db().execute('INSERT INTO participation(record_id,member_id,status) VALUES(?,?,?) ON CONFLICT(record_id,member_id) DO UPDATE SET status=excluded.status',(record_id,member_id,status))
             audit(f'Registró asistencia/inscripción en #{record_id}',item['group_id']); db().commit()
             flash('Participación actualizada.','success')
@@ -523,6 +575,16 @@ def create_app(test_config=None):
     def demo_retro():
         from .retro_demo import seed_visual_demo
         upgrade_schema(db());added=seed_visual_demo(db());click.echo('Ejemplos retro añadidos.' if added else 'No se añadieron duplicados; exige una base de demostración.')
+
+    @app.cli.command('create-test-user')
+    @click.option('--email',default='pruebas@depec.demo',show_default=True)
+    @click.option('--password',prompt=True,hide_input=True,confirmation_prompt=True)
+    def create_test_user(email,password):
+        if len(password)<12:raise click.ClickException('Usa una contraseña de al menos 12 caracteres.')
+        upgrade_schema(db())
+        if not create_test_operator(db(),email.strip().lower(),password):
+            raise click.ClickException('El correo ya pertenece a una cuenta existente; no se modificó.')
+        click.echo('Cuenta de pruebas disponible: '+email)
 
     @app.cli.command('create-admin')
     @click.option('--email',prompt=True)
