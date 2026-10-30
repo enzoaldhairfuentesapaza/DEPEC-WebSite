@@ -60,7 +60,7 @@ def upgrade_schema(connection):
     if connection.execute('PRAGMA user_version').fetchone()[0]<3:
         connection.execute("UPDATE groups SET color='#bd123b' WHERE id=1 AND color='#d46a3b'")
     names={r[1] for r in connection.execute('PRAGMA table_info(groups)')}
-    for name,definition in [('photo',"TEXT NOT NULL DEFAULT ''"),('maps_url',"TEXT NOT NULL DEFAULT ''"),('maps_embed_url',"TEXT NOT NULL DEFAULT ''")]:
+    for name,definition in [('photo',"TEXT NOT NULL DEFAULT ''"),('maps_url',"TEXT NOT NULL DEFAULT ''"),('maps_embed_url',"TEXT NOT NULL DEFAULT ''"),('contact_settings',"TEXT NOT NULL DEFAULT '{}'")]:
         if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
     connection.executescript((Path(__file__).parent/'community_schema.sql').read_text(encoding='utf-8'))
     for name,definition in [('hero_title',"TEXT NOT NULL DEFAULT ''"),('hero_description',"TEXT NOT NULL DEFAULT ''"),('verse_mode',"TEXT NOT NULL DEFAULT 'daily'"),('custom_verses',"TEXT NOT NULL DEFAULT '[]'"),('founded_date',"TEXT NOT NULL DEFAULT ''"),('anniversary_note',"TEXT NOT NULL DEFAULT ''")]:

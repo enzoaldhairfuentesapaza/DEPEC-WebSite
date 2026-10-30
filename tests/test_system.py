@@ -838,3 +838,82 @@ def test_message_collage_preserves_church_and_moderation(client,app):
     assert 'class="message-church">SEC Israel' in root and '--church:#' in root
     assert 'Saludo aprobado de Israel' not in client.get('/?group=3').get_data(as_text=True)
     assert 'Saludo aprobado de Israel' in client.get('/?group=2').get_data(as_text=True)
+
+# v0.4.6 — agrandar imágenes y contacto público por organización.
+def test_image_viewer_is_public_and_preserves_asset_permissions(client,app):
+    root=client.get('/').get_data(as_text=True)
+    assert '<dialog class="image-viewer"' in root and 'data-viewer-image' in root
+    assert 'data-viewer-original' in root and 'data-viewer-zoom' in root
+    assert 'viewer-contact.js' in root and 'viewer-contact.css' in root
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        aid=db.execute('SELECT id FROM albums WHERE group_id=3 LIMIT 1').fetchone()[0]
+    album=client.get(f'/album/{aid}').get_data(as_text=True)
+    assert 'data-image-viewer' in album
+    csrf=login(client)
+    panel=client.get('/panel').get_data(as_text=True)
+    assert '<dialog class="image-viewer"' not in panel
+    response=client.post('/panel/contacto',data=dict(csrf=csrf,group_id=3,enabled='1',label='Habla con Jorge Chávez',title='Te escuchamos',whatsapp='+51 123 456 789',phone='+51 123 456 789',email='contacto@example.com',message='Ven a compartir',name='Directiva de prueba',hours='Sábados',whatsapp_message='Hola, ¿cuándo se reúnen?'))
+    assert response.status_code==302
+    page=client.get('/?group=3').get_data(as_text=True)
+    assert 'Habla con Jorge Chávez' in page and 'https://wa.me/51123456789?' in page
+    assert 'tel:+51123456789' in page and 'mailto:contacto@example.com' in page
+    assert 'Ven a compartir' in page and 'Directiva de prueba' in page
+    assert 'Habla con Jorge Chávez' not in client.get('/').get_data(as_text=True)
+    assert 'Habla con Jorge Chávez' in client.get(f'/album/{aid}').get_data(as_text=True)
+    assert 'Habla con Jorge Chávez' in client.get('/calendar?public=1&group=3').get_data(as_text=True)
+    assert 'Habla con Jorge Chávez' in client.get('/cumpleanos?group=3').get_data(as_text=True)
+
+
+def test_contact_config_scope_csrf_validation_and_visibility(client,app):
+    assert client.get('/panel/contacto').status_code==302
+    csrf=login(client,'israel@depec.demo')
+    assert client.get('/panel/contacto?group=2').status_code==200
+    assert client.get('/panel/contacto?group=3').status_code==403
+    assert client.post('/panel/contacto',data=dict(csrf=csrf,group_id=3,enabled='1')).status_code==403
+    assert client.post('/panel/contacto',data=dict(group_id=2,enabled='1')).status_code==400
+    valid=dict(csrf=csrf,group_id=2,enabled='1',label='Escríbenos Israel',email='iglesia@example.com',message='<script>alert(1)</script>')
+    assert client.post('/panel/contacto',data=valid).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:before=db.execute('SELECT contact_settings FROM groups WHERE id=2').fetchone()[0]
+    for bad in [dict(whatsapp='https://evil.example'),dict(phone='123'),dict(email='a@example.com\nBcc:x@example.com'),dict(label='a'*33)]:
+        assert client.post('/panel/contacto',data={**valid,**bad}).status_code==200
+        with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT contact_settings FROM groups WHERE id=2').fetchone()[0]==before
+    page=client.get('/?group=2').get_data(as_text=True)
+    assert 'Escríbenos Israel' in page and '<script>alert(1)</script>' not in page and '&lt;script&gt;' in page
+    valid.pop('enabled')
+    assert client.post('/panel/contacto',data=valid).status_code==302
+    assert 'data-contact-bubble' not in client.get('/?group=2').get_data(as_text=True)
+    assert 'data-contact-bubble' in client.get('/').get_data(as_text=True)
+
+
+def test_contact_defaults_and_special_email_characters(client):
+    from app.contact import validate_contact,public_contact
+    group=dict(id=3,name='SEC Prueba',active=1,contact_settings='{}')
+    assert public_contact(group)['group_name']=='SEC Prueba'
+    assert public_contact(group)['whatsapp_url']==''
+    group['contact_settings']=json.dumps(validate_contact(dict(enabled='1',email='name?test@example.com')))
+    assert public_contact(group)['email_url']=='mailto:name%3Ftest@example.com'
+    group['contact_settings']='invalid json'
+    assert public_contact(group)['label']=='Contáctanos'
+    group['active']=0
+    assert public_contact(group) is None
+
+
+def test_contact_migration_preserves_existing_organization_data(tmp_path):
+    path=tmp_path/'without-contact.sqlite'
+    schema=(Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8').replace(",contact_settings TEXT NOT NULL DEFAULT '{}'",'')
+    with sqlite3.connect(path) as db:
+        db.executescript(schema)
+        db.execute("INSERT INTO groups(id,name,kind,color,hero_title) VALUES(1,'DEPEC','DEPEC','#cc254b','Título conservado')")
+    from app.community_data import upgrade_schema
+    with sqlite3.connect(path) as db:
+        upgrade_schema(db);upgrade_schema(db)
+        assert db.execute('SELECT hero_title,contact_settings FROM groups').fetchone()==('Título conservado','{}')
+        db.execute('UPDATE groups SET contact_settings=?',(json.dumps(dict(enabled=False)),));db.commit()
+        upgrade_schema(db)
+        assert json.loads(db.execute('SELECT contact_settings FROM groups').fetchone()[0])==dict(enabled=False)
+
+
+def test_member_cannot_edit_contact_and_uses_own_church_bubble(client):
+    csrf=login(client,'miembro-0@demo.depec.local')
+    assert client.post('/panel/contacto',data=dict(csrf=csrf,group_id=3,enabled='1')).status_code==403
+    assert 'data-contact-group="3"' in client.get('/mi-perfil').get_data(as_text=True)

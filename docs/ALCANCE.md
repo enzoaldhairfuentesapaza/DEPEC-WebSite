@@ -70,3 +70,7 @@ DEPEC sin local propio; mapas de las iglesias autorizados por CSP, resolución d
 ## Actualización v0.4.5
 
 Collage de eventos en cuatro columnas con colocación calculada y rellenos decorativos sin enlaces ni fechas, adaptación a dos/una columnas y borde dorado para DEPEC en la portada general. DIRECTIVA DEPEC solo en esa portada; directorio de miembros reservado a las páginas de iglesias; mural de mensajes aprobados con autor y color de iglesia.
+
+## Actualización v0.4.6
+
+Visor accesible para imágenes públicas, ajuste a pantalla/tamaño original, navegación por grupo de imágenes y controles de teclado. Burbuja de contacto por organización con edición autorizada, opción de ocultar, enlaces seguros a WhatsApp/llamada/correo y configuración independiente de DEPEC, iglesias y sus álbumes. No se cambian permisos de acceso a imágenes ni se envían mensajes automáticamente.

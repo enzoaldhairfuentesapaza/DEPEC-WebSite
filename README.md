@@ -1,6 +1,10 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.4.5 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.4.6 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+
+## Novedades v0.4.6 — imágenes ampliables y contacto por organización
+
+Visor de imágenes con tamaño completo, navegación, teclado y enlace al original. Burbuja de contacto independiente para DEPEC y cada iglesia, con WhatsApp, teléfono, correo, horario y mensaje editables en **Panel → Contacto público**. Se puede ocultar y no incluye números inventados. Consulta `ACTUALIZAR_v0.4.6.md`.
 
 ## Novedades v0.4.5 — collage en cuatro columnas y portada DEPEC
 

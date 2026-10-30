@@ -184,6 +184,30 @@ def register_community(app, services):
         profiles=[r for r in db().execute('SELECT p.*,p.user_id id,u.name,ms.group_id,gr.name group_name FROM member_profiles p JOIN users u ON u.id=p.user_id JOIN memberships ms ON ms.user_id=p.user_id JOIN groups gr ON gr.id=ms.group_id ORDER BY p.updated DESC') if can_review(r['group_id'])]
         return render_template('approvals.html',applications=applications,messages=messages,profile_reviews=profiles)
 
+    @bp.route('/panel/contacto',methods=['GET','POST'])
+    @logged
+    def contact():
+        from .contact import contact_settings,validate_contact
+        scopes=[dict(r) for r in db().execute('SELECT * FROM groups WHERE active=1') if can_review(r['id'])]
+        if not scopes:abort(403)
+        gid=request.form.get('group_id',type=int) if request.method=='POST' else request.args.get('group',type=int)
+        if gid is None and request.method=='GET':gid=scopes[0]['id']
+        group=next((gr for gr in scopes if gr['id']==gid),None)
+        if not group:abort(403)
+        settings=contact_settings(group)
+        if request.method=='POST':
+            try:
+                settings=validate_contact(request.form)
+                db().execute('UPDATE groups SET contact_settings=? WHERE id=?',(json.dumps(settings),gid))
+                audit('Actualizó burbuja de contacto pública',gid);db().commit()
+                flash('Contacto actualizado. Los cambios ya aparecen en la página de esta organización.','success')
+                return redirect(url_for('community.contact',group=gid))
+            except ValueError as exc:
+                settings={**settings,**{key:request.form.get(key,'') for key in settings}}
+                settings['enabled']=request.form.get('enabled')=='1'
+                flash(str(exc),'error')
+        return render_template('contact.html',scopes=scopes,selected=group,settings=settings)
+
     @bp.route('/panel/identidad',methods=['GET','POST'])
     @logged
     def identity():

@@ -21,6 +21,7 @@ from .community_data import upgrade_schema, local_now, event_presentation, pictu
 from .community import register_community
 from .announcements import announcement_state
 from .collage import build_event_collage
+from .contact import public_contact
 
 
 def create_app(test_config=None):
@@ -161,8 +162,11 @@ def create_app(test_config=None):
         if request.endpoint=='community.album':
             album=db().execute('SELECT group_id FROM albums WHERE id=?',((request.view_args or {}).get('album_id'),)).fetchone()
             if album:scope=album['group_id']
+        if g.user and request.endpoint in ['retro.member_profile','community.member_home']:
+            member_scope=db().execute("SELECT group_id FROM memberships WHERE user_id=? AND status='Aprobado'",(g.user['id'],)).fetchone()
+            if member_scope:scope=member_scope['group_id']
         brand_group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(build_event_collage=build_event_collage,contrast_color=contrast_color,brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
+        return dict(contact_widget=public_contact(brand_group),build_event_collage=build_event_collage,contrast_color=contrast_color,brand_group=brand_group,is_leader=community['is_leader'],can_review=community['can_review'],demo_mode=demo_mode,modules=MODULES, groups=groups, can=allowed, csrf=session.get('csrf'), today=local_now().date().isoformat(), roles=ROLES, current_scope=request.args.get('group',''), nav=request.endpoint)
 
     @app.route('/')
     def public():
