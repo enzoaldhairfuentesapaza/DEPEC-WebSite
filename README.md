@@ -1,64 +1,38 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.4.8 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.5.0 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
 
-## Ajuste v0.4.8 — imágenes sin botón visible
+## Funciones del sistema
 
-Se retira el botón visible de ampliación sobre las fotografías. El clic en la imagen sigue abriendo el visor y se conserva el acceso mediante teclado. No cambia ninguna otra función.
+- Páginas públicas de DEPEC y de cada SEC/GJ, con identidad y colores administrados por DEPEC.
+- Diseño juvenil retro, temas claro/oscuro y navegación adaptable a móviles.
+- Hero personalizable con últimos afiches y fotografías, mensajes y versículos diarios configurables.
+- Comunidades, directivas con insignias por cargo y perfiles públicos de miembros por iglesia.
+- Eventos con estados automáticos, local predeterminado por iglesia y enlaces a Google Maps. DEPEC no tiene local propio.
+- Collage de hasta seis eventos en cuatro columnas, orientación automática o manual, imágenes opcionales/genéricas y vista previa.
+- Rellenos decorativos adaptados a su orientación y destacados de eventos DEPEC en rojo.
+- Calendario de eventos con detalle lateral e historial de actividades finalizadas.
+- Tablón de anuncios con programación, prioridades y cuenta regresiva; se oculta cuando está vacío.
+- Álbumes con aportes de líderes, atribución de fotografías, tres álbumes recientes en portada y directorio con búsqueda y paginación.
+- Visor de imágenes al hacer clic, navegación y tamaño original, sin botones visibles sobre las fotos.
+- Mapas por iglesia y burbuja de contacto configurable con WhatsApp, teléfono, correo y horario.
+- Registro de miembros sujeto a aprobación y mensajes de comunidad moderados.
+- Calendario de cumpleaños independiente: padrón privado y publicación voluntaria de día/mes.
+- Gestión privada de miembros, bautismo, asistencia, cargos y permisos por organización.
+- Secretaría, credenciales, documentos, planes de trabajo, reuniones y tareas.
+- Tesorería con ingresos, egresos, comprobantes y reportes.
+- Autenticación, permisos, protección CSRF, historial de acciones y copias de seguridad.
+- Cuenta global de pruebas con selector de iglesia y rol, incluidos Administrador, Miembro y Visitante.
 
-## Novedades v0.4.7 — destacados DEPEC y directorio de álbumes
+## Cuenta global de pruebas
 
-Rellenos verticales y cuadrados con composiciones propias; eventos DEPEC destacados con marco y cabecera de su color rojo; colores administrados desde el panel de los líderes DEPEC. Los eventos finalizados permanecen en el calendario, sin sección en las portadas. Cada portada muestra tres álbumes y enlaza a una página con búsqueda y paginación. Consulta `ACTUALIZAR_v0.4.7.md`.
+En una base demo: `pruebas@depec.demo` / `DepecPruebas2026!`. El selector **PRUEBAS** cambia la iglesia y el rol sin cerrar sesión, aplicando sus permisos reales. Las operaciones guardadas modifican la base de pruebas. Consulta [CUENTA_DE_PRUEBAS.md](CUENTA_DE_PRUEBAS.md).
 
-## Novedades v0.4.6 — imágenes ampliables y contacto por organización
+## Documentación e historial
 
-Visor de imágenes con tamaño completo, navegación, teclado y enlace al original. Burbuja de contacto independiente para DEPEC y cada iglesia, con WhatsApp, teléfono, correo, horario y mensaje editables en **Panel → Contacto público**. Se puede ocultar y no incluye números inventados. Consulta `ACTUALIZAR_v0.4.6.md`.
+Este README resume las adiciones acumuladas, sin separar la documentación por versiones. Las guías generales están en `docs/`. Las notas de entregas y el README histórico se conservan en `docs_locales/`, excluido de Git.
 
-## Novedades v0.4.5 — collage en cuatro columnas y portada DEPEC
-
-Collage de hasta seis eventos en cuatro columnas de escritorio, con huecos cubiertos por imágenes decorativas del sistema y bordes dorados para los encuentros de DEPEC en la portada general. Las SEC/GJ conservan sus perfiles de miembros; DEPEC muestra DIRECTIVA DEPEC y un mural de mensajes aprobados de las iglesias. Consulta `ACTUALIZAR_v0.4.5.md`.
-
-## Novedades v0.4.4 — DEPEC sin local y calendario de cumpleaños
-
-DEPEC representa a todas las SEC/GJ y no muestra ni configura local propio. Se corrige la política que bloqueaba el mapa de las iglesias y se intenta resolver el enlace corto de Jorge Chávez al iniciar. Directiva con insignias SVG centradas por cargo; tarjetas de miembros y testimonios más compactas. Calendario público de cumpleaños separado del de eventos, con consentimiento y aprobación del perfil; el calendario privado conserva los permisos del padrón. Consulta `ACTUALIZAR_v0.4.4.md`.
-
-## Novedades v0.4.3 — tarjetas con formato y vista previa
-
-El collage respeta la orientación de cada evento y ocupa menos ancho. El formulario permite formato automático, vertical u horizontal; imagen propia, solo información o tres imágenes genéricas; y vista previa en vivo. Directiva compacta con pines por cargo, tipografía más equilibrada y mapa del local configurable por iglesia. Consulta `ACTUALIZAR_v0.4.3.md`.
-
-## Corrección v0.4.2 — inicio en Windows
-
-Lectura explícita en UTF-8 y reparación automática de la restricción de fotografías creada con codificación incorrecta. Conserva los datos y genera antes una copia de seguridad de la base afectada. Consulta `ACTUALIZAR_v0.4.2.md`.
-
-## Novedades v0.4.1 — tablón de anuncios temporales
-
-En **Panel → Tablón de anuncios** cada organización puede crear avisos con prioridad, fecha de inicio y vencimiento. Solo aparecen en su propia portada durante su vigencia, con una cuenta regresiva. Si no hay anuncios vigentes, no se muestra la sección. Al vencer se retiran de la página, pero se conservan en el panel.
-
-No se cargan anuncios de cancelación como datos demo: el tablón inicia vacío. Instrucciones en `ACTUALIZAR_v0.4.1.md`.
-
-## Novedades v0.4 — retro, claro y oscuro
-
-Diseño retro con colores protagonistas por iglesia, bordes de impresión y modos claro/oscuro/sistema. DEPEC muestra las comunidades antes de los eventos; las páginas SEC/GJ muestran solo su propia comunidad. El collage presenta hasta seis eventos en un marco cuadrado de escritorio y adapta su composición en celular.
-
-Jorge Chávez incluye la foto y los textos aportados por el usuario, su enlace real de Maps, líderes y miembros ficticios, eventos con afiches retro y álbumes con escenas IA. En bases de demostración se cargan los ejemplos una sola vez, sin eliminar registros anteriores. Las instalaciones reales sin la cuenta admin@depec.demo no reciben datos ficticios.
-
-Cada iglesia puede configurar su título, descripción, versículos y fecha de fundación. Los miembros pueden elegir entre cinco avatares cristianos o una fotografía y personalizar su perfil público, sujeto a aprobación.
-
-**Para mirar el diseño sin iniciar el servidor:** después de descomprimir, abre `preview/index.html` o `preview/jorge-chavez.html`. Son vistas estáticas: las acciones de calendario, álbumes y formularios necesitan la aplicación funcionando.
-
-Instrucciones completas en `ACTUALIZAR_v0.4.md`.
-
-## Novedades v0.3
-
-Diseño rojo/borgoña inspirado en el logo DEPEC, fotografía real de SEC Jerusalén, hero con los últimos archivos de la organización, distinción afiche/fotografía, versículo diario local, collage de eventos y calendario con tarjeta lateral. Páginas por iglesia con su color, dirección y Google Maps; registro de miembros sujeto a aprobación y mensajes moderados; álbumes con contribuciones de líderes y perfiles públicos de la directiva.
-
-La migración es aditiva y se ejecuta al abrir una base existente. Antes de actualizar, realiza una copia. Las nuevas dependencias se instalan desde requirements. Lee `ACTUALIZAR_v0.3.md` para los pasos, permisos y limitaciones.
-
-## Novedades visuales de la versión 0.2
-
-Portada rediseñada con navegación pública, accesos rápidos, imágenes de referencia generadas con IA, tarjetas de eventos con detalles, filtros SEC/GJ, información de cada grupo, galería y preguntas frecuentes. Menú móvil con teclado, estados accesibles y navegación usable sin JavaScript. Las fotografías ilustrativas no representan actividades ni integrantes reales.
-
-Si ya tienes la versión anterior, lee `ACTUALIZAR_v0.2.md`. No necesitas reiniciar ni volver a cargar la base de datos.
+El historial real de commits se conserva en Git y puede consultarse con `git log --oneline`. No se incluyen hashes inventados de entregas que no fueron commits del repositorio.
 
 ## Inicio rápido en Windows
 

@@ -5,3 +5,7 @@ instance/
 *.pyc
 .env
 backups/
+
+# Guías e historial de versiones conservados solo localmente
+docs_locales/
+/ACTUALIZAR_*.md
