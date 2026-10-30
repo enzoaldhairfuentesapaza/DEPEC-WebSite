@@ -64,7 +64,7 @@ def register_community(app, services):
     def public_context(scope):
         people=leaders(scope);ranking={'Presidente':0,'Vicepresidente':1,'Secretario':2,'Prosecretario':3,'Tesorero':4,'Protesorero':5,'Vocal':6}
         group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone()
-        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,local_map=local_map(group),page_members=retro['public_members'](scope),anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
+        return dict(announcements=active_announcements(db(),scope),announcements_now_ms=int(local_now().replace(tzinfo=LIMA).timestamp()*1000),page_settings=group,local_map=local_map(group) if group['kind']!='DEPEC' else None,birthday_people=[p for p in retro['public_birthdays'](scope) if p['month']==local_now().month],page_members=retro['public_members'](scope),anniversary_info=anniversary(group),hero_files=public_files(scope)[:8],albums=public_albums(scope),testimonials=messages(scope),main_leaders=sorted([p for p in people if p['role'] in ranking],key=lambda p:ranking[p['role']]),other_leaders=sorted([p for p in people if p['role'] not in ranking],key=lambda p:not p['featured']),verse=group_verse(group))
 
     @bp.get('/archivos/<int:file_id>')
     def asset(file_id):
@@ -195,6 +195,7 @@ def register_community(app, services):
             try:
                 color=request.form.get('color','');maps=request.form.get('maps_url','').strip()
                 if not re.fullmatch('#[0-9a-fA-F]{6}',color):raise ValueError('Color inválido.')
+                if db().execute('SELECT kind FROM groups WHERE id=?',(gid,)).fetchone()[0]=='DEPEC':maps=''
                 if maps:
                     parsed=urlsplit(maps)
                     if parsed.scheme!='https' or parsed.hostname not in ['www.google.com','google.com','maps.google.com','maps.app.goo.gl','goo.gl'] or parsed.username:raise ValueError('Usa un enlace HTTPS de Google Maps.')
@@ -221,11 +222,30 @@ def register_community(app, services):
                 photo=None;file=request.files.get('photo')
                 if file and file.filename:photo,_,_=save_image(file)
                 db().execute('UPDATE groups SET color=?,description=?,church=?,address=?,maps_url=?,schedule=? WHERE id=?',(color,request.form.get('description','')[:2000],request.form.get('church','')[:200],request.form.get('address','')[:500],maps,request.form.get('schedule','')[:500],gid))
-                db().execute('UPDATE groups SET maps_embed_url=? WHERE id=?',(embed,gid))
+                if existing['kind']=='DEPEC':
+                    db().execute("UPDATE groups SET church='',address='',schedule='',maps_url='',maps_embed_url='' WHERE id=?",(gid,))
+                else:db().execute('UPDATE groups SET maps_embed_url=? WHERE id=?',(embed,gid))
                 if photo:db().execute('UPDATE groups SET photo=? WHERE id=?',(photo,gid))
                 audit('Actualizó identidad pública y local',gid);db().commit();flash('Identidad actualizada.','success');return redirect(url_for('community.identity'))
             except ValueError as exc:flash(str(exc),'error')
         return render_template('identity.html',scopes=scopes)
+
+    @bp.post('/panel/identidad/resolver-mapa')
+    @logged
+    def resolve_location():
+        gid=request.form.get('group_id',type=int)
+        if not can_review(gid):abort(403)
+        group=db().execute('SELECT * FROM groups WHERE id=?',(gid,)).fetchone()
+        if not group or group['kind']=='DEPEC':abort(400)
+        from .map_locations import resolve_map_embed
+        try:
+            embed=resolve_map_embed(group['maps_url'])
+            db().execute('UPDATE groups SET maps_embed_url=? WHERE id=?',(embed,gid))
+            audit('Actualizó mapa desde enlace de Google Maps',gid);db().commit()
+            flash('Mapa actualizado con las coordenadas del enlace.','success')
+        except Exception:
+            flash('No pudimos obtener las coordenadas. Tu enlace se conserva; puedes pegar el código de Compartir → Insertar un mapa.','error')
+        return redirect(url_for('community.identity'))
 
     @bp.get('/iglesia/<int:group_id>/foto')
     def church_photo(group_id):

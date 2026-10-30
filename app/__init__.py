@@ -37,8 +37,12 @@ def create_app(test_config=None):
     if Path(app.config['DATABASE']).exists():
         with sqlite3.connect(app.config['DATABASE']) as connection:
             upgrade_schema(connection)
-            from .retro_demo import seed_visual_demo
+            from .retro_demo import seed_visual_demo,seed_birthday_demo
             seed_visual_demo(connection)
+            seed_birthday_demo(connection)
+            if not app.config.get('TESTING'):
+                from .map_locations import sync_short_maps
+                sync_short_maps(connection)
 
     def db():
         if 'db' not in g:
@@ -143,8 +147,8 @@ def create_app(test_config=None):
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['X-Frame-Options']='DENY'
         response.headers['Referrer-Policy']='same-origin'
-        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-        if g.get('user') or request.endpoint=='public':
+        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src https://www.google.com https://maps.google.com https://google.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        if g.get('user') or request.endpoint in ['public','retro.public_birthday_calendar']:
             response.headers['Cache-Control']='no-store'
         return response
 
@@ -224,12 +228,11 @@ def create_app(test_config=None):
     @app.get('/birthdays')
     @logged
     def birthdays():
+        from .birthday_calendar import birthday_calendar,private_birthdays
         members=records('members',request.args.get('group',type=int))
-        try:
-            month=int(request.args.get('month',date.today().month))
-            if not 1<=month<=12: raise ValueError()
-        except ValueError: abort(400)
-        return render_template('birthdays.html',items=sorted([r for r in members if int(r['d']['date'][5:7])==month],key=lambda r:r['d']['date'][8:]),month=month)
+        try:calendar_data=birthday_calendar(private_birthdays(members),request.args.get('month'))
+        except (ValueError,OverflowError):abort(400)
+        return render_template('birthdays.html',public_page=False,**calendar_data)
 
     @app.get('/manage/<module>')
     @logged
@@ -269,8 +272,8 @@ def create_app(test_config=None):
             if start.tzinfo or end.tzinfo or end<=start:raise ValueError('El vencimiento debe ser posterior al inicio, con la hora local de Perú.')
         if module=='events':
             group=db().execute('SELECT * FROM groups WHERE id=?',(group_id,)).fetchone()
-            if not data.get('location'):data['location']=group['address']
-            if not data.get('event_address'):data['event_address']=data.get('location') or group['address']
+            if not data.get('location'):data['location']=group['address'] if group['kind']!='DEPEC' else 'Sede por confirmar'
+            if not data.get('event_address'):data['event_address']=data.get('location') or (group['address'] if group['kind']!='DEPEC' else '')
             data['media_kind']=data.get('media_kind') or 'Afiche'
         if module=='events' and data['end_date']<data['date']: raise ValueError('La finalización debe ser posterior al inicio.')
         if module=='members' and data['date']>date.today().isoformat(): raise ValueError('La fecha de nacimiento no puede ser futura.')
@@ -430,7 +433,7 @@ def create_app(test_config=None):
                 if action=='group':
                     kind=request.form['kind']; color=request.form['color']
                     if kind not in ['SEC','GJ','DEPEC'] or len(color)!=7 or color[0]!='#' or any(c not in '0123456789abcdefABCDEF' for c in color[1:]): raise ValueError()
-                    values=(request.form['name'].strip(),kind,color,request.form.get('description',''),request.form.get('church',''),request.form.get('address',''),request.form.get('schedule',''))
+                    values=(request.form['name'].strip(),kind,color,request.form.get('description',''),'' if kind=='DEPEC' else request.form.get('church',''),'' if kind=='DEPEC' else request.form.get('address',''),'' if kind=='DEPEC' else request.form.get('schedule',''))
                     if not values[0]: raise ValueError()
                     gid=request.form.get('id',type=int)
                     if gid==1 and kind!='DEPEC': raise ValueError()

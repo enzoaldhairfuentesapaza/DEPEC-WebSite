@@ -155,3 +155,80 @@
 .public .event-collage.retro-collage h3 {display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 
 [data-event-editor] label[hidden] {display:none!important}
+
+/* v0.4.4 — insignias dibujadas para cada servicio, centradas en la tarjeta. */
+.public .main-directive {justify-content:safe center}
+.leader-card {--pin-bg:#e8dafa;--pin-ink:#4b326e;--role-accent:#9a7dc0}
+.leader-card.role-presidente {--pin-bg:#ffe09a;--pin-ink:#754a0a;--role-accent:#e7b744}
+.leader-card.role-vicepresidente {--pin-bg:#d8d9ff;--pin-ink:#46458a;--role-accent:#9699e7}
+.leader-card.role-secretario,.leader-card.role-prosecretario {--pin-bg:#c6eafa;--pin-ink:#22516a;--role-accent:#76b8d1}
+.leader-card.role-tesorero,.leader-card.role-protesorero {--pin-bg:#c8ead4;--pin-ink:#286443;--role-accent:#78b58d}
+.leader-card.role-vocal {--pin-bg:#ffdbc9;--pin-ink:#7b4531;--role-accent:#e7a080}
+.public .main-directive .leader-card,.public .additional-grid .leader-card {border-top:5px solid var(--role-accent);overflow:hidden;transform:none}
+.public .main-directive .leader-picture,.public .additional-grid .leader-picture {position:relative;overflow:visible;border-bottom:3px solid var(--role-accent);background:var(--pin-bg);filter:none}
+.public .leader-picture .role-symbol {position:absolute;inset:auto auto -25px 50%;transform:translateX(-50%);width:52px;height:52px;display:grid;place-items:center;border:2px solid var(--pin-ink);border-radius:50%;background:var(--pin-bg);color:var(--pin-ink);box-shadow:0 0 0 4px var(--rpanel),2px 5px 0 var(--rshadow);z-index:2}
+.public .leader-picture .role-symbol svg {width:36px;height:36px;fill:none}
+.public .role-presidente .role-symbol {border-radius:16px 16px 22px 22px}
+.public .role-secretario .role-symbol,.public .role-prosecretario .role-symbol {border-radius:9px}
+.public .role-vocal .role-symbol {border-radius:18px 18px 18px 5px}
+.public .role-prosecretario .role-symbol,.public .role-protesorero .role-symbol {border-style:dashed}
+.public .main-directive .leader-card-content {padding:36px 12px 16px;text-align:center}
+.public .additional-grid .leader-card-content {padding-top:36px;text-align:center}
+.public .main-directive .leader-card h3 {margin:7px 0 12px;font-size:17px}
+.public .main-directive .leader-role {display:inline-block;padding:4px 8px;border-radius:20px;color:var(--pin-ink);background:var(--pin-bg);font-size:11px;font-weight:800}
+.public .main-directive .leader-card blockquote {font-size:13px;line-height:1.6;text-align:center}
+.public .main-directive .leader-card .demo-label {font-size:9px}
+.public .main-directive .leader-contact {text-align:center}
+
+/* Familias y testimonios: menos superficie, contenido ampliable y texto legible. */
+.public .members-grid {grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;align-items:start}
+.public .member-photo-frame {padding:15px 12px 23px}
+.public .member-photo-frame>img {width:88px;height:88px;border-radius:50%;box-shadow:2px 2px 0 var(--rshadow)}
+.public .member-photo-frame>.demo-label {font-size:9px;bottom:5px;right:8px;padding:2px 5px}
+.public .member-card-body {padding:16px}
+.public .member-card-body h3 {font-size:19px;line-height:1.25;margin:8px 0 10px}
+.public .member-card-body>p,.public .member-card-body details p {font-size:13px;line-height:1.65;margin:0 0 12px}
+.public .member-church {font-size:11px;line-height:1.4}
+.public .member-card-body summary {font-size:12px;min-height:36px}
+.public .member-card-body blockquote {font-size:14px;margin-top:14px}
+.public .testimonials-grid {grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
+.public .testimony {margin:0;padding:20px}
+.public .testimony>span {font-size:38px;line-height:.8;display:block}
+.public .testimony blockquote {font-size:16px;line-height:1.65;margin:10px 0 16px}
+.public .testimony figcaption strong {font-size:14px}
+.public .testimony figcaption small {font-size:12px;line-height:1.5}
+.public .testimony details {margin-bottom:14px}
+.public .testimony summary,.public .testimony details p {font-size:13px;line-height:1.7}
+
+/* Cumpleaños vive en su calendario, sin mezclarlo con los eventos. */
+.birthday-home-strip {display:flex;gap:24px;align-items:center;justify-content:space-between;background:var(--rpanel);border:2px solid var(--rline);border-left:8px solid var(--brand);padding:24px;margin:28px 0;box-shadow:4px 4px 0 var(--rshadow);border-radius:5px}
+.public .birthday-home-strip h2 {font:800 28px/1.2 Georgia,serif;margin:8px 0}
+.public .birthday-home-strip p {font-size:14px;line-height:1.7;margin:8px 0;color:var(--rmuted)}
+.birthday-home-strip .button {flex-shrink:0}
+.birthday-calendar-layout {display:grid;grid-template-columns:minmax(0,2fr) minmax(240px,1fr);gap:24px;align-items:start;margin:25px 0 50px}
+.birthday-calendar-panel {padding:20px;min-width:0;border:2px solid var(--rline);background:var(--rpanel)}
+.birthday-calendar-panel .panel-heading {display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+.birthday-calendar-panel .panel-heading h2 {font:800 25px/1.3 Georgia,serif;margin:0}
+.birthday-calendar-scroll {overflow-x:auto}
+.birthday-month-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-width:590px;border-left:1px solid var(--rline);border-top:1px solid var(--rline)}
+.birthday-weekday {font:800 12px/1.5 'Courier New',monospace;background:var(--rsoft);padding:12px 5px;text-align:center;border-right:1px solid var(--rline);border-bottom:1px solid var(--rline)}
+.birthday-cell {min-height:105px;border-right:1px solid var(--rline);border-bottom:1px solid var(--rline);padding:7px;min-width:0;background:var(--rpanel)}
+.birthday-cell.outside {background:var(--rsoft);opacity:.65}
+.birthday-cell.is-today {box-shadow:inset 0 0 0 2px var(--brand)}
+.birthday-cell-day {display:block;font-size:13px;font-weight:700;margin-bottom:7px}
+.birthday-chip {display:block;margin-top:5px;background:var(--church);color:var(--on-church)!important;font-size:11px;line-height:1.5;border-radius:4px;padding:5px;overflow-wrap:anywhere;text-decoration:none}
+.birthday-chip:focus-visible {outline:3px solid var(--rink);outline-offset:2px}
+.birthday-month-list>h2 {font:800 23px/1.3 Georgia,serif;margin:0 0 20px}
+.birthday-person {display:flex;align-items:center;gap:15px;border:2px solid var(--rline);border-left:5px solid var(--church);border-radius:5px;padding:15px;background:var(--rpanel);margin-bottom:13px;scroll-margin-top:120px}
+.birthday-person:target {box-shadow:0 0 0 3px var(--brand)}
+.birthday-date {font:800 30px/1 Georgia,serif;color:var(--church);text-align:center;min-width:42px}
+.birthday-date small {display:block;font:800 12px/1.4 'Courier New',monospace;margin-top:5px;text-transform:uppercase}
+.public .birthday-person h3,.private .birthday-person h3 {font:800 17px/1.4 Georgia,serif;margin:0 0 6px}
+.birthday-person p,.birthday-privacy-note {font-size:13px;line-height:1.6;margin:0;color:var(--rmuted)}
+.birthday-person .demo-label {font-size:10px;margin-top:8px}
+.birthday-profile-fields {border:1px solid var(--rline);border-radius:5px;padding:20px;margin:16px 0}
+.birthday-profile-fields legend {font-weight:700;padding:0 7px}
+.birthday-profile-fields p {font-size:13px;line-height:1.7}
+@media(max-width:1100px){.public .members-grid {grid-template-columns:repeat(3,minmax(0,1fr))}.birthday-calendar-layout{grid-template-columns:1fr}.birthday-month-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.birthday-month-list>h2,.birthday-privacy-note{grid-column:1/-1}}
+@media(max-width:800px){.public .members-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.public .testimonials-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.birthday-home-strip{align-items:flex-start;flex-direction:column}}
+@media(max-width:520px){.public .members-grid{gap:12px}.public .member-card-body{padding:12px}.public .member-card-body h3{font-size:17px}.public .member-photo-frame>img{width:74px;height:74px}.public .member-photo-frame>.demo-label{font-size:8px}.public .testimonials-grid{grid-template-columns:1fr}.birthday-month-list{grid-template-columns:1fr}.birthday-calendar-panel{padding:12px}.birthday-home-strip{padding:20px}.public .main-directive{justify-content:flex-start}}

@@ -9,7 +9,7 @@ def seed(db):
         raise RuntimeError('La base ya tiene usuarios. seed-demo exige una base nueva para no sobrescribir información.')
     organizations=[('DEPEC','DEPEC','#bd123b','Una comunidad, muchos caminos para servir.'),('SEC Israel','SEC','#c66a3b','Creciendo en fe y compartiendo el camino.'),('SEC Jorge Chávez','SEC','#78955c','Jóvenes con un corazón dispuesto a servir.'),('SEC Chiguata','SEC','#8f7aad','Encuentros que fortalecen nuestra comunidad.'),('SEC Jerusalén','SEC','#5a92a5','Construimos comunidad con alegría y propósito.'),('GJ Campo Marte','GJ','#c99b40','Pequeños pasos, grandes descubrimientos.'),('GJ Rosales','GJ','#bd7a8a','Un espacio para aprender, compartir y crecer.')]
     for name,kind,color,description in organizations:
-        db.execute('INSERT INTO groups(name,kind,color,description,church,schedule) VALUES(?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET description=excluded.description,church=excluded.church,schedule=excluded.schedule',(name,kind,color,description,'Iglesia '+name.replace('SEC ','').replace('GJ ',''),'Sábados · horario de ejemplo por confirmar'))
+        db.execute('INSERT INTO groups(name,kind,color,description,church,schedule) VALUES(?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET description=excluded.description,church=excluded.church,schedule=excluded.schedule',(name,kind,color,description,'' if kind=='DEPEC' else 'Iglesia '+name.replace('SEC ','').replace('GJ ',''),'' if kind=='DEPEC' else 'Sábados · horario de ejemplo por confirmar'))
     accounts=[('Administración demo','admin@depec.demo',1),('Presidencia Israel','israel@depec.demo',0),('Secretaría Israel','secretaria@depec.demo',0),('Tesorería Israel','tesoreria@depec.demo',0),('Presidencia DEPEC','presidencia@depec.demo',0),('Vocal Israel','vocal@depec.demo',0)]
     for name,email,admin in accounts:
         db.execute('INSERT INTO users(name,email,password,admin) VALUES(?,?,?,?)',(name,email,generate_password_hash('DepecDemo2026!'),admin))
@@ -37,5 +37,6 @@ def seed(db):
     for title in ['Campamento de líderes','Agradecidos al Rey 2026']:
         db.execute('INSERT INTO albums(group_id,title,description,created_by,created) VALUES(1,?,?,1,?)',(title,'Álbum de ejemplo. Los líderes pueden aportar aquí las fotografías del encuentro.',datetime.now().isoformat(timespec='seconds')))
     db.commit()
-    from .retro_demo import seed_visual_demo
+    from .retro_demo import seed_visual_demo,seed_birthday_demo
     seed_visual_demo(db)
+    seed_birthday_demo(db)

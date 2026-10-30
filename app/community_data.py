@@ -6,7 +6,7 @@ from datetime import datetime, date
 from pathlib import Path
 from random import Random
 from urllib.parse import urlencode
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 from html.parser import HTMLParser
 from zoneinfo import ZoneInfo
 from PIL import Image, UnidentifiedImageError
@@ -66,6 +66,16 @@ def upgrade_schema(connection):
     for name,definition in [('hero_title',"TEXT NOT NULL DEFAULT ''"),('hero_description',"TEXT NOT NULL DEFAULT ''"),('verse_mode',"TEXT NOT NULL DEFAULT 'daily'"),('custom_verses',"TEXT NOT NULL DEFAULT '[]'"),('founded_date',"TEXT NOT NULL DEFAULT ''"),('anniversary_note',"TEXT NOT NULL DEFAULT ''")]:
         if name not in names:connection.execute(f'ALTER TABLE groups ADD COLUMN {name} {definition}')
     connection.executescript((Path(__file__).parent/'retro_schema.sql').read_text(encoding='utf-8'))
+    profile_names={r[1] for r in connection.execute('PRAGMA table_info(member_profiles)')}
+    for name,definition in [('birthday_md',"TEXT NOT NULL DEFAULT ''"),('birthday_public',"INTEGER NOT NULL DEFAULT 0")]:
+        if name not in profile_names:connection.execute(f'ALTER TABLE member_profiles ADD COLUMN {name} {definition}')
+    # Limpia solo los locales de ejemplo que introdujo la demo anterior.
+    connection.execute("UPDATE groups SET address='' WHERE kind='DEPEC' AND address='Dirección de ejemplo: Avenida La Amistad 123, Arequipa'")
+    for rid,raw in connection.execute("SELECT r.id,r.data FROM records r JOIN groups g ON g.id=r.group_id WHERE r.module='events' AND g.kind='DEPEC'").fetchall():
+        event=json.loads(raw)
+        if event.get('demo') and event.get('location')=='Dirección de ejemplo: Avenida La Amistad 123, Arequipa':
+            event['location']='Sede por confirmar';event['event_address']=''
+            connection.execute('UPDATE records SET data=? WHERE id=?',(json.dumps(event),rid))
     # Incorpora adjuntos anteriores sin borrar ni mover los archivos originales.
     upload_root=Path(connection.execute('PRAGMA database_list').fetchone()[2]).parent/'uploads'
     for rid,module,gid,raw,uid,created in connection.execute("SELECT id,module,group_id,data,author_id,created FROM records WHERE module IN ('events','posts','gallery')").fetchall():
@@ -120,8 +130,9 @@ def normalize_map_embed(value):
         if len(parser.sources)!=1:raise ValueError('Pega un único iframe de Google Maps.')
         value=parser.sources[0]
     parsed=urlsplit(value)
+    coordinate_embed=parsed.path=='/maps' and parse_qs(parsed.query).get('output')==['embed'] and bool(re.fullmatch(r'-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?',(parse_qs(parsed.query).get('q') or [''])[0]))
     if (parsed.scheme!='https' or parsed.netloc not in ['www.google.com','maps.google.com','google.com']
-        or parsed.path not in ['/maps/embed','/maps/embed/'] or not parsed.query or len(value)>6000):
+        or (parsed.path not in ['/maps/embed','/maps/embed/'] and not coordinate_embed) or not parsed.query or len(value)>6000):
         raise ValueError('Usa el enlace de Google Maps de Compartir → Insertar un mapa, no el enlace corto.')
     return value
 
@@ -158,10 +169,12 @@ def event_presentation(data,group,at=None):
     layout=result.get('card_layout','Automático')
     result['orientation']=('portrait' if layout=='Vertical' else 'landscape' if layout=='Horizontal' else 'landscape' if width>height else 'portrait')
     result['has_image']=result['image_source']!='none'
-    result['location']=result.get('location') or group['address'] or 'Lugar por confirmar'
-    address=result.get('event_address') or result.get('location') or group['address']
+    umbrella=dict(group).get('kind')=='DEPEC'
+    default_address='' if umbrella else group['address']
+    result['location']=result.get('location') or default_address or 'Sede por confirmar'
+    address=result.get('event_address') or result.get('location') or default_address
     result['maps_link']='https://www.google.com/maps/search/?'+urlencode({'api':1,'query':address}) if address and 'por confirmar' not in address.lower() and 'ejemplo' not in address.lower() else ''
-    if result.get('event_address','') in ['',group['address']] and result['location']==group['address'] and group['maps_url']:
+    if not umbrella and result.get('event_address','') in ['',group['address']] and result['location']==group['address'] and group['maps_url']:
         result['maps_link']=group['maps_url']
     return result
 

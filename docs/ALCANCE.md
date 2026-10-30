@@ -62,3 +62,7 @@ Se añaden diseño retro y temas claro/oscuro/sistema; comunidades solo en DEPEC
 ## Actualización v0.4.1
 
 Tablón público de anuncios por organización, con prioridad, inicio, vencimiento y cuenta regresiva. Los borradores, anuncios retirados, programados o vencidos no se muestran. La sección completa se omite si está vacía. Los anuncios vencidos se conservan en el panel; JavaScript retira los visibles al vencer sin recargar. Gestión por los permisos existentes. Detalles en `ACTUALIZAR_v0.4.1.md`.
+
+## Actualización v0.4.4
+
+DEPEC sin local propio; mapas de las iglesias autorizados por CSP, resolución de enlaces cortos de Google Maps y conservación de su enlace original; insignias SVG centradas por cargo; tarjetas de miembros y testimonios compactas; calendario de cumpleaños separado con filtro por iglesia, navegación mensual, consentimiento público sin año ni edad y calendario privado sujeto a los permisos del padrón. Detalles en `ACTUALIZAR_v0.4.4.md`.

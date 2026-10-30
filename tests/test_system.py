@@ -626,3 +626,142 @@ def test_map_column_upgrade_preserves_existing_identity(tmp_path):
         db.execute("INSERT INTO groups(name,kind,color,maps_url,hero_title) VALUES('SEC Prueba','SEC','#3453d1','https://maps.app.goo.gl/conservar','Título conservado')")
         db.commit();upgrade_schema(db);upgrade_schema(db)
         assert db.execute('SELECT maps_embed_url,maps_url,hero_title FROM groups').fetchone()==('','https://maps.app.goo.gl/conservar','Título conservado')
+
+# v0.4.4 — DEPEC sin sede, mapas permitidos y cumpleaños separados.
+def test_depec_has_no_venue_and_events_require_their_own_location(client,app):
+    root=client.get('/').get_data(as_text=True)
+    assert 'class="local-map-section"' not in root and 'local-map-frame' not in root
+    assert 'local-map-frame' in client.get('/?group=3').get_data(as_text=True)
+    csrf=login(client)
+    assert client.post('/panel/identidad',data=dict(csrf=csrf,group_id=1,color='#cc254b',address='No es una sede',church='No es una iglesia',schedule='No aplica',maps_url='https://maps.app.goo.gl/prueba')).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT address,church,schedule,maps_url,maps_embed_url FROM groups WHERE id=1').fetchone()==('','','','','')
+    data=payload();data.update(csrf=csrf,group_id='1',location='',event_address='')
+    assert client.post('/manage/events/new',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        event=json.loads(db.execute("SELECT data FROM records WHERE module='events' ORDER BY id DESC LIMIT 1").fetchone()[0])
+        assert event['location']=='Sede por confirmar'
+    assert 'DEPEC coordina a las SEC y GJ' in client.get('/panel/identidad').get_data(as_text=True)
+
+
+def test_maps_frames_and_local_preview_allowed_without_relaxing_other_sources(client):
+    csp=client.get('/?group=3').headers['Content-Security-Policy']
+    directives={part.split()[0]:part.split()[1:] for part in csp.split(';') if part.strip()}
+    assert set(directives['frame-src'])=={'https://www.google.com','https://maps.google.com','https://google.com'}
+    assert "'self'" in directives['default-src'] and "'none'" in directives['frame-ancestors']
+    assert 'blob:' in directives['img-src']
+
+
+def test_short_google_maps_resolution_and_redirect_protection():
+    from app.map_locations import resolve_map_embed,MapsRedirects,coordinates_from_url
+    class Response:
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def geturl(self):return 'https://www.google.com/maps/place/Prueba/data=!8m2!3d-16.42!4d-71.49'
+    class Opener:
+        def open(self,request,timeout):
+            assert request.full_url=='https://maps.app.goo.gl/test' and timeout==3
+            return Response()
+    result=resolve_map_embed('https://maps.app.goo.gl/test',Opener())
+    from app.community_data import normalize_map_embed
+    assert normalize_map_embed(result)==result and 'q=-16.42%2C-71.49' in result
+    assert coordinates_from_url('https://www.google.com/maps?q=-16.42,-71.49')=='-16.42,-71.49'
+    for url in ['http://127.0.0.1/','https://evil.example/','https://www.google.com.evil.example/maps','https://www.google.com:444/maps']:
+        with pytest.raises(ValueError):MapsRedirects().redirect_request(None,None,302,'',{},url)
+    with pytest.raises(ValueError):coordinates_from_url('https://www.google.com/maps/@-16.4,-71.4,15z')
+
+
+def test_map_sync_caches_failure_and_preserves_short_link(app,monkeypatch):
+    from app import map_locations
+    calls=[]
+    def fail(url):calls.append(url);raise OSError('sin conexión')
+    monkeypatch.setattr(map_locations,'resolve_map_embed',fail)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("UPDATE groups SET maps_embed_url='' WHERE id=3");db.commit()
+        map_locations.sync_short_maps(db);map_locations.sync_short_maps(db)
+        assert len(calls)==1
+        assert db.execute('SELECT maps_url,maps_embed_url FROM groups WHERE id=3').fetchone()==('https://maps.app.goo.gl/KSo2PasAcs3HdyU36','')
+        db.execute("DELETE FROM site_settings WHERE key='maps-resolution-3'");db.commit()
+        monkeypatch.setattr(map_locations,'resolve_map_embed',lambda url:'https://www.google.com/maps?q=-16.42%2C-71.49&output=embed')
+        map_locations.sync_short_maps(db)
+        assert '-16.42' in db.execute('SELECT maps_embed_url FROM groups WHERE id=3').fetchone()[0]
+
+
+def test_map_resolve_action_requires_church_permission(client,app,monkeypatch):
+    from app import map_locations
+    monkeypatch.setattr(map_locations,'resolve_map_embed',lambda url:'https://www.google.com/maps?q=-16.42%2C-71.49&output=embed')
+    csrf=login(client,'israel@depec.demo')
+    assert client.post('/panel/identidad/resolver-mapa',data=dict(csrf=csrf,group_id=3)).status_code==403
+    assert client.post('/panel/identidad/resolver-mapa',data=dict(csrf=csrf,group_id=2)).status_code==302
+
+
+def test_public_birthdays_need_consent_active_membership_and_approved_profile(client,app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        uid=db.execute("SELECT id FROM users WHERE email='miembro-0@demo.depec.local'").fetchone()[0]
+        db.execute("UPDATE users SET name='Cumpleaños autorizado' WHERE id=?",(uid,))
+        db.execute("UPDATE member_profiles SET birthday_md='02-29',birthday_public=1,status='Aprobado',published=1 WHERE user_id=?",(uid,))
+    path='/cumpleanos?group=3&month=2028-02-01'
+    page=client.get(path).get_data(as_text=True)
+    assert 'Cumpleaños autorizado' in page and 'birthday-month-grid' in page
+    assert 'Cumpleaños autorizado' in client.get('/cumpleanos?month=2028-02-01').get_data(as_text=True)
+    assert 'Cumpleaños autorizado' not in client.get('/cumpleanos?group=2&month=2028-02-01').get_data(as_text=True)
+    assert 'Andrea Demo' not in page and 'birth_year' not in page
+    for sql in ["UPDATE member_profiles SET birthday_public=0 WHERE user_id=?","UPDATE member_profiles SET birthday_public=1,status='Pendiente' WHERE user_id=?","UPDATE member_profiles SET status='Aprobado',published=0 WHERE user_id=?","UPDATE memberships SET status='Pendiente' WHERE user_id=?"]:
+        with sqlite3.connect(app.config['DATABASE']) as db:
+            db.execute("UPDATE member_profiles SET birthday_public=1,status='Aprobado',published=1 WHERE user_id=?",(uid,))
+            db.execute("UPDATE memberships SET status='Aprobado' WHERE user_id=?",(uid,))
+            db.execute(sql,(uid,))
+        assert 'Cumpleaños autorizado' not in client.get(path).get_data(as_text=True)
+    assert client.get('/cumpleanos?group=999').status_code==404
+    assert client.get('/cumpleanos?month=2026-13-01').status_code==400
+
+
+def test_member_can_opt_into_birthday_calendar_only_after_review(client,app):
+    csrf=login(client,'miembro-0@demo.depec.local')
+    with sqlite3.connect(app.config['DATABASE']) as db:uid=db.execute("SELECT id FROM users WHERE email='miembro-0@demo.depec.local'").fetchone()[0]
+    data=dict(csrf=csrf,avatar='luz',message='Mensaje del cumpleaños',published='1',birthday_month='11',birthday_day='5',birthday_public='1')
+    assert client.post('/mi-perfil',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT birthday_md,birthday_public,status FROM member_profiles WHERE user_id=?',(uid,)).fetchone()==('11-05',1,'Pendiente')
+        name=db.execute('SELECT name FROM users WHERE id=?',(uid,)).fetchone()[0]
+    assert name not in client.get('/cumpleanos?month=2026-11-01').get_data(as_text=True)
+    leader=app.test_client();csrf_leader=login(leader)
+    assert leader.post('/panel/aprobaciones',data=dict(csrf=csrf_leader,action='profile',id=uid,decision='Aprobado')).status_code==302
+    assert name in client.get('/cumpleanos?month=2026-11-01').get_data(as_text=True)
+    data.update(birthday_month='2',birthday_day='30')
+    assert client.post('/mi-perfil',data=data).status_code==200
+    with sqlite3.connect(app.config['DATABASE']) as db:assert db.execute('SELECT birthday_md FROM member_profiles WHERE user_id=?',(uid,)).fetchone()[0]=='11-05'
+    data.update(birthday_month='11',birthday_day='5');data.pop('birthday_public')
+    assert client.post('/mi-perfil',data=data).status_code==302
+    assert name not in client.get('/cumpleanos?month=2026-11-01').get_data(as_text=True)
+
+
+def test_private_birthday_calendar_is_separate_and_scoped(client):
+    assert client.get('/birthdays').status_code==302
+    login(client,'israel@depec.demo')
+    page=client.get('/birthdays?month=10').get_data(as_text=True)
+    assert 'birthday-month-grid' in page and 'calendario de eventos' in page
+    assert 'Andrea Demo 2-1' in page and 'Andrea Demo 3-1' not in page
+    assert 'Andrea Demo 3-1' not in client.get('/birthdays?group=3&month=10').get_data(as_text=True)
+    assert client.get('/birthdays?month=13').status_code==400
+
+
+def test_february_29_remains_visible_in_non_leap_year():
+    from app.birthday_calendar import birthday_calendar
+    person=dict(day=29,month=2,name='Ejemplo')
+    data=birthday_calendar([person],'2027-02-01')
+    assert data['leap_birthday'] and data['items']==[person]
+    assert not birthday_calendar([person],'2028-02-01')['leap_birthday']
+
+
+def test_upgrade_adds_birthday_consent_without_publishing_existing_members(tmp_path):
+    path=tmp_path/'before-birthdays.sqlite'
+    schema=(Path(__file__).parents[1]/'app'/'schema.sql').read_text(encoding='utf-8').replace(",birthday_md TEXT NOT NULL DEFAULT '',birthday_public INTEGER NOT NULL DEFAULT 0",'')
+    with sqlite3.connect(path) as db:
+        db.executescript(schema)
+        db.execute("INSERT INTO groups(id,name,kind,color) VALUES(1,'DEPEC','DEPEC','#cc254b'),(2,'SEC Prueba','SEC','#3453d1')")
+        db.execute("INSERT INTO users(id,name,email,password) VALUES(1,'Miembro real de prueba','real@example.com','hash')")
+        db.execute("INSERT INTO memberships(user_id,group_id,status,created) VALUES(1,2,'Aprobado','2026-01-01')")
+        db.execute("INSERT INTO member_profiles(user_id,message,published,status,updated) VALUES(1,'Mensaje conservado',1,'Aprobado','2026-01-01')")
+    app=create_app(dict(TESTING=True,DATABASE=str(path),UPLOAD_FOLDER=str(tmp_path/'uploads'),SECRET_KEY='test'))
+    with sqlite3.connect(path) as db:assert db.execute('SELECT birthday_md,birthday_public,message,status FROM member_profiles WHERE user_id=1').fetchone()==('',0,'Mensaje conservado','Aprobado')
+    assert 'Miembro real de prueba' not in app.test_client().get('/cumpleanos').get_data(as_text=True)

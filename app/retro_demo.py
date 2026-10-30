@@ -21,7 +21,7 @@ def seed_visual_demo(db):
     if not jc:return False
     jc=jc[0]
     db.execute("UPDATE groups SET color='#3453d1',hero_title=?,hero_description=?,description=?,verse_mode='custom',custom_verses=?,maps_url=?,address=?,schedule=?,church=? WHERE id=? AND hero_title=''",(JC_TITLE,JC_DESCRIPTION,JC_DESCRIPTION,json.dumps([JC_VERSE]),'https://maps.app.goo.gl/KSo2PasAcs3HdyU36','Local de la Iglesia Jorge Chávez · ver ubicación exacta en Google Maps','Sábados, 18:00 h · horario de ejemplo por confirmar','Iglesia Jorge Chávez',jc))
-    db.execute("UPDATE groups SET hero_title='La fe nos une. Juntos, crecemos.',hero_description='Somos jóvenes de varias iglesias de Arequipa sureste. Nuestras SEC y GJ comparten la fe, la amistad y el deseo de servir a Cristo y a su iglesia.',address='Dirección de ejemplo: Avenida La Amistad 123, Arequipa',anniversary_note='Fecha de demostración; pendiente de confirmar',founded_date='2006-11-15' WHERE id=1 AND hero_title=''")
+    db.execute("UPDATE groups SET hero_title='La fe nos une. Juntos, crecemos.',hero_description='Somos jóvenes de varias iglesias de Arequipa sureste. Nuestras SEC y GJ comparten la fe, la amistad y el deseo de servir a Cristo y a su iglesia.',anniversary_note='Fecha de demostración; pendiente de confirmar',founded_date='2006-11-15' WHERE id=1 AND hero_title=''")
     colors=['#cc254b','#f06c30','#3453d1','#8c43c3','#0c8d75','#edc744','#d84c93']
     for i,row in enumerate(db.execute('SELECT id FROM groups ORDER BY id').fetchall()):
         if row[0]!=jc:db.execute('UPDATE groups SET color=? WHERE id=?',(colors[i%len(colors)],row[0]))
@@ -47,7 +47,7 @@ def seed_visual_demo(db):
         for i,title in enumerate(titles):
             day=current+timedelta(days=2+i*3)
             static=f'demo/afiche-{i+1}.svg';wide=i in [1,4]
-            data=dict(title=title+' · DEMO',body='Evento ficticio de demostración: un tiempo para compartir, aprender y fortalecer nuestra amistad. Fecha y horario generados para probar el diseño.',date=day.replace(hour=18,minute=0,second=0).isoformat(timespec='minutes'),end_date=day.replace(hour=20,minute=0,second=0).isoformat(timespec='minutes'),location='Local de la Iglesia Jorge Chávez · ver ubicación exacta en Google Maps' if gid==jc else 'Dirección de ejemplo: Avenida La Amistad 123, Arequipa',event_address='',category=['Encuentro','Taller','Otro'][i%3],visibility='public',status='Reprogramado' if i==3 else 'Programado',capacity='40',poster_static=static,image_width=1200 if wide else 720,image_height=620 if wide else 1000,media_kind='Afiche',demo=True)
+            data=dict(title=title+' · DEMO',body='Evento ficticio de demostración: un tiempo para compartir, aprender y fortalecer nuestra amistad. Fecha y horario generados para probar el diseño.',date=day.replace(hour=18,minute=0,second=0).isoformat(timespec='minutes'),end_date=day.replace(hour=20,minute=0,second=0).isoformat(timespec='minutes'),location='Local de la Iglesia Jorge Chávez · ver ubicación exacta en Google Maps' if gid==jc else 'Sede por confirmar',event_address='',category=['Encuentro','Taller','Otro'][i%3],visibility='public',status='Reprogramado' if i==3 else 'Programado',capacity='40',poster_static=static,image_width=1200 if wide else 720,image_height=620 if wide else 1000,media_kind='Afiche',demo=True)
             rid=db.execute('INSERT INTO records(module,group_id,data,author_id,created,updated) VALUES(\'events\',?,?,?,?,?)',(gid,json.dumps(data),owner,stamp,stamp)).lastrowid
             db.execute('INSERT INTO media_files(group_id,record_id,title,kind,static_name,width,height,uploaded_by,visibility,created) VALUES(?,?,?,\'Afiche\',?,?,?,?,\'public\',?)',(gid,rid,title+' · DEMO',static,data['image_width'],data['image_height'],owner,stamp))
         for title in ['Campamento de líderes · DEMO','Agradecidos al Rey 2026 · DEMO','Juntos hacemos comunidad · DEMO']:
@@ -56,3 +56,12 @@ def seed_visual_demo(db):
                 db.execute('INSERT INTO media_files(group_id,album_id,title,kind,static_name,width,height,uploaded_by,visibility,created) VALUES(?,?,?,\'Fotografía\',?,1536,1024,?,\'public\',?)',(gid,aid,'Escena de ejemplo · IA',f'demo/{picture}.png',owner,stamp))
     db.execute('INSERT INTO media_files(group_id,title,kind,static_name,width,height,uploaded_by,visibility,created) VALUES(?,\'Nuestra familia de Jorge Chávez\',\'Fotografía\',\'images/jorge-chavez.jpg\',640,641,?,\'public\',?)',(jc,owner,stamp))
     db.execute("INSERT INTO site_settings(key,value) VALUES('retro-demo-v04',?)",(stamp,));db.commit();return True
+
+
+def seed_birthday_demo(db):
+    if not db.execute("SELECT 1 FROM users WHERE email='admin@depec.demo'").fetchone():return
+    if db.execute("SELECT 1 FROM site_settings WHERE key='birthday-demo-v044'").fetchone():return
+    current=local_now()
+    for i,(uid,) in enumerate(db.execute('SELECT user_id FROM member_profiles WHERE demo=1 ORDER BY user_id').fetchall()):
+        db.execute("UPDATE member_profiles SET birthday_md=?,birthday_public=1 WHERE user_id=? AND birthday_md=''",(f'{current.month:02d}-{min(28,3+i*2):02d}',uid))
+    db.execute("INSERT INTO site_settings(key,value) VALUES('birthday-demo-v044',?)",(current.isoformat(),));db.commit()
