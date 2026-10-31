@@ -1,0 +1,24 @@
+.row-actions{gap:6px!important;flex-wrap:wrap}
+.row-actions a{padding:6px 9px!important;min-height:30px!important;font-size:12px!important;border:1px solid var(--rline)!important;border-radius:7px!important;box-shadow:1px 2px 0 var(--rline);display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
+.row-actions a span{font-size:16px;line-height:1}
+.row-actions a:hover{transform:translateY(-1px);box-shadow:2px 3px 0 var(--rline)}
+.card-modal{padding:34px 20px 20px;max-width:min(640px,92vw);width:640px;max-height:90dvh;overflow:auto;background:var(--rpanel);color:var(--rink);border:2px solid var(--rline);border-radius:14px}
+.card-modal::backdrop{background:#151020b8;backdrop-filter:blur(5px)}
+.modal-close{position:absolute;right:8px;top:6px;border:0;background:transparent;color:inherit;font-size:20px;cursor:pointer}
+.card-modal .y-event{max-height:none;width:100%;margin:0}
+.card-modal .y-event-picture img{object-fit:contain;max-height:55dvh}
+.worship-editor{padding:18px;margin-bottom:22px}.worship-editor>summary{cursor:pointer;font-weight:700}
+.worship-forms{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding-top:20px}.worship-forms form{display:grid;gap:12px;align-content:start}.worship-forms input[type=checkbox]{width:auto}
+.worship-marker{padding:3px 0;margin:4px 0;font:12px/1.45 system-ui;overflow-wrap:anywhere}
+.worship-marker strong{font-size:10px;font-weight:500;color:var(--rink);opacity:.75;display:block}
+.worship-marker>span{display:inline;color:var(--church);font-weight:600}
+.worship-marker>span::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--church);margin:0 5px 2px 0}
+.worship-marker small{display:block;font-size:11px}
+.worship-marker.cancelled>span{color:#c33149}.worship-marker.cancelled>span::before{background:#c33149}
+.worship-edit-day{display:block;font:11px/1.4 system-ui;border:0;background:transparent;color:inherit;opacity:.7;cursor:pointer;padding:2px 0;text-decoration:underline;text-underline-offset:3px}
+.worship-edit-day:hover,.worship-edit-day:focus-visible{opacity:1}
+.worship-forms label.cancel-worship{display:flex;align-items:center;gap:10px;cursor:pointer;margin:4px 0}
+.worship-forms label.cancel-worship input[type=checkbox]{appearance:auto;flex:0 0 18px;width:18px!important;height:18px;min-height:0;padding:0;border:0;box-shadow:none;margin:0;accent-color:var(--brand);background:transparent}
+.worship-forms label.cancel-worship span{font-size:14px;line-height:1.4}
+label[title],legend[title]{cursor:help}
+@media(max-width:700px){.worship-forms{grid-template-columns:1fr}.card-modal{width:92vw}}

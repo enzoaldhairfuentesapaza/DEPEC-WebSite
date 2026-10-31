@@ -135,13 +135,6 @@ if (announcementBoard) {
   document.addEventListener('visibilitychange', () => { if (announcementBoard.isConnected) tickAnnouncements(); });
 }
 
-// Las ayudas se abren con teclado y también funcionan sin JavaScript.
-document.addEventListener('click',event => {
-  document.querySelectorAll('.field-help[open]').forEach(help => { if(!help.contains(event.target)) help.open=false; });
-});
-document.addEventListener('keydown',event => {
-  if(event.key==='Escape') document.querySelectorAll('.field-help[open]').forEach(help => {help.open=false;help.querySelector('summary')?.focus();});
-});
 // Formularios específicos (identidad, contacto, etc.): notas junto al campo como ayuda opcional.
 document.querySelectorAll('form label').forEach((label,index) => {
   if(label.closest('.format-switch,.avatar-options,.invited-churches,.role-lab') || label.closest('.field-caption')) return;
@@ -154,8 +147,19 @@ document.querySelectorAll('form label').forEach((label,index) => {
   const wrapper=document.createElement('div');wrapper.className='form-field '+label.className;
   const caption=document.createElement('div');caption.className='field-caption';
   const title=document.createElement('label');control.id ||= 'guided-field-'+index;title.htmlFor=control.id;title.textContent=text;
-  const help=document.createElement('details');help.className='field-help';const summary=document.createElement('summary');summary.textContent='?';summary.setAttribute('aria-label','Ayuda: '+text);
-  const body=document.createElement('div');body.textContent=helpText;body.setAttribute('role','note');help.append(summary,body);caption.append(title,help);
+  title.title=helpText;title.tabIndex=0;title.setAttribute('aria-description',helpText);caption.append(title);
   label.before(wrapper);wrapper.append(caption);
   [...label.children].filter(child=>child.tagName!=='SMALL').forEach(child=>wrapper.append(child));label.remove();
+});
+
+// Ayuda clásica sobre el título, sin controles adicionales.
+document.querySelectorAll('[data-field-hint]').forEach(hint=>{
+ const previous=hint.previousElementSibling;
+ const label=hint.closest('.field-caption')?.querySelector('label') || (previous?.matches('label,legend,h2,h3') ? previous : previous?.querySelector('label'));
+ if(label){label.title=hint.dataset.fieldHint;label.tabIndex=0;label.setAttribute('aria-description',hint.dataset.fieldHint);}
+});
+
+// Los cambios del padrón usan listeners externos, compatibles con la política CSP.
+document.querySelectorAll('[data-member-switch]').forEach(control=>{
+ control.addEventListener('change',()=>{control.form.requestSubmit();});
 });

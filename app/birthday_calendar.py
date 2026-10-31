@@ -22,6 +22,7 @@ def birthday_calendar(items,requested=None):
 def private_birthdays(records):
     output=[]
     for item in records:
+        if item['d'].get('public_birthday')!='Sí':continue
         try:born=date.fromisoformat(item['d'].get('date',''))
         except (ValueError,TypeError):continue
         output.append(dict(id=item['id'],name=item['d']['title'],group_name=item['group_name'],color=item['color'],month=born.month,day=born.day,demo=False))

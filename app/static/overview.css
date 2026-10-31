@@ -1,0 +1,26 @@
+/* Cada filtro posee una columna propia, sin mínimos heredados que lo desborden. */
+.filterbar{display:flex!important;gap:16px!important;align-items:flex-end;flex-wrap:wrap!important;padding:20px!important}
+.filterbar>label,.filterbar>.form-field{min-width:0!important;flex:1 1 170px!important;width:auto!important}
+.filterbar>.search-label{flex:2 1 260px!important}
+.filterbar .field-caption label,.filterbar>label{min-width:0!important;letter-spacing:0}
+.filterbar input:not([type=checkbox]),.filterbar select{width:100%;max-width:100%;height:44px}
+.filterbar>.filter-completed{flex:0 0 auto!important;min-width:0!important;min-height:44px;padding:0 8px!important;align-self:flex-end;gap:9px!important;white-space:nowrap}
+.filterbar>.button{min-height:44px;flex:0 0 auto!important}
+.overview-dashboard{display:grid;gap:26px;min-width:0}
+.overview-metrics{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+.overview-metrics article{padding:18px 16px;border:1px solid var(--rline);border-radius:12px;background:var(--rpanel)}
+.overview-metrics span{display:block;font-size:12px;line-height:1.5;color:var(--rmuted)}
+.overview-metrics strong{display:block;font-size:30px;line-height:1.3;margin-top:7px}
+.overview-highlight{display:grid;grid-template-columns:minmax(260px,1fr) minmax(0,2fr);gap:20px;align-items:start}
+.overview-cash,.overview-tasks{padding:24px;background:var(--rpanel);border:1px solid var(--rline);border-radius:14px}
+.overview-cash strong{display:block;font-size:32px;margin:10px 0}
+.overview-cash p,.overview-tasks p{font-size:13px;margin:0;line-height:1.6}
+.overview-tasks h2{font-size:19px}.overview-tasks>a:not(.text-link){display:block;font-size:13px;padding:10px 0;border-bottom:1px solid var(--rline)}.overview-tasks small{display:block;color:var(--rmuted)}.overview-tasks>.text-link{display:inline-block;margin-top:14px}
+.overview-section-title{display:flex;align-items:center;justify-content:space-between;gap:16px}.overview-section-title h2{margin:0}.overview-section-title .eyebrow{margin-bottom:6px!important}
+.overview-church-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start}
+.overview-church{border:1px solid var(--rline);border-top:5px solid var(--church);border-radius:12px;background:var(--rpanel);min-width:0;overflow:hidden}
+.overview-church header{padding:18px;display:flex;align-items:center;flex-wrap:wrap;gap:9px;border-bottom:1px solid var(--rline)}.overview-church h3{font-size:16px;margin:0}.overview-church-dot{width:8px;height:8px;border-radius:50%;background:var(--church)}
+.overview-church-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:18px;border-bottom:1px solid var(--rline)}.overview-church-counts strong{display:block;font-size:23px}.overview-church-counts span{font-size:11px;color:var(--rmuted)}
+.overview-next{padding:18px}.overview-next h4{font-size:16px;line-height:1.4;margin:0 0 10px;overflow-wrap:anywhere}.overview-next p{font-size:13px;line-height:1.6;margin-bottom:8px;overflow-wrap:anywhere}.overview-church footer{border-top:1px solid var(--rline);padding:12px 18px;font-size:12px}
+@media(max-width:1250px){.overview-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.overview-church-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-highlight,.overview-church-grid{grid-template-columns:minmax(0,1fr)}.overview-section-title{align-items:flex-start;flex-wrap:wrap}.filterbar>.filter-completed{flex:1 1 180px!important}.filterbar>.button{flex:1 1 100px!important}}

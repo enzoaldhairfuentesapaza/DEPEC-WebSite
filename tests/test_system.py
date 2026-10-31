@@ -1162,7 +1162,7 @@ def test_event_audience_controls_and_church_boundaries(client,app):
     csrf=login(client,'israel@depec.demo')
     page=client.get('/manage/events/new').get_data(as_text=True)
     assert 'El local de tu iglesia se completa por defecto.' not in page
-    assert 'field-help' in page and 'Iglesias invitadas' in page
+    assert 'title="' in page and 'Iglesias invitadas' in page and 'class="field-help"' not in page
     right=page.split('class="preview-controls"')[1]
     for name in ['image_mode','generic_image','attachment','card_layout']:
         assert f'name="{name}"' in right.split('id="event-preview-title"')[0]
@@ -1231,3 +1231,90 @@ def test_church_media_panel_does_not_list_depec_private_albums(client,app):
     login(client,'israel@depec.demo')
     page=client.get('/panel/archivos').get_data(as_text=True)
     assert 'Álbum privado exclusivo DEPEC' not in page
+
+
+def test_weekly_worship_and_exceptions(client,app):
+    csrf=login(client)
+    page=client.get('/calendar?group=3&month=2026-11-01').get_data(as_text=True)
+    assert 'Culto juvenil · 15:30' in page
+    assert 'Domingo · 15:30' in client.get('/?group=3').get_data(as_text=True)
+    response=client.post('/calendar/culto',data=dict(csrf=csrf,action='day',group_id=3,day='2026-11-01',cancelled=1,note='Por elecciones'))
+    assert response.status_code==302
+    page=app.test_client().get('/calendar?public=1&group=3&month=2026-11-01').get_data(as_text=True)
+    assert 'Sin culto' in page and 'Por elecciones' in page
+    assert 'data-worship-day' not in page
+    client.post('/calendar/culto',data=dict(csrf=csrf,action='reset',group_id=3,day='2026-11-01'))
+    assert 'Por elecciones' not in client.get('/calendar?group=3&month=2026-11-01').get_data(as_text=True)
+    other=app.test_client();other_csrf=login(other,'israel@depec.demo')
+    assert other.post('/calendar/culto',data=dict(csrf=other_csrf,action='schedule',group_id=3,weekday=1,hour='15:00')).status_code==403
+    assert client.post('/calendar/culto',data=dict(csrf=csrf,action='schedule',group_id=1,weekday=1,hour='15:00')).status_code==403
+    client.post('/calendar/culto',data=dict(csrf=csrf,action='schedule',group_id=3,weekday=2,hour='17:00'))
+    assert 'Miércoles · 17:00' in client.get('/?group=3').get_data(as_text=True)
+
+
+def test_event_view_uses_inline_modal_and_favicon(client):
+    login(client)
+    page=client.get('/manage/events').get_data(as_text=True)
+    assert 'data-card-open' in page and 'data-card-modal' in page and '<template id="card-' in page
+    assert 'images/iep-logo.png' in page
+    assert client.get('/static/images/iep-logo.png').status_code==200
+
+
+def test_member_account_registration_switches_self_edit_and_delete(client,app):
+    csrf=login(client,'israel@depec.demo')
+    data=dict(csrf=csrf,group_id=2,title='Nuevo integrante',email='nuevo@example.com',password='MiClaveNueva2026!',date='2002-03-10',joined='2026-01-01',baptized='1',active='1',birthday='1',body='Me gusta cantar',avatar='paloma',photo=image_upload())
+    assert client.post('/manage/members/new',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        rid,uid=db.execute('SELECT record_id,user_id FROM member_accounts ORDER BY record_id DESC LIMIT 1').fetchone()
+        password=db.execute('SELECT password FROM users WHERE id=?',(uid,)).fetchone()[0]
+        assert password!='MiClaveNueva2026!'
+    page=client.get('/manage/members').get_data(as_text=True)
+    assert 'role="switch"' in page and 'nuevo@example.com' in page
+    assert client.get(f'/members/{rid}/photo').status_code==200
+    assert client.post(f'/members/{rid}/switch',data=dict(csrf=csrf,field='category')).status_code==302
+    other=app.test_client();other_csrf=login(other)
+    member=app.test_client();member.post('/login',data=dict(csrf=token(member),email='nuevo@example.com',password='MiClaveNueva2026!'))
+    assert member.get('/mi-datos').status_code==200 and member.get('/manage/members').status_code==403
+    with member.session_transaction() as s:member_csrf=s['csrf']
+    data=dict(csrf=member_csrf,group_id=2,title='Nombre actualizado',email='nuevo@example.com',date='2002-03-10',avatar='paloma',body='Toco guitarra',password='NoCambiar12345!')
+    assert member.post('/mi-datos',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT password FROM users WHERE id=?',(uid,)).fetchone()[0]==password
+        raw=json.loads(db.execute('SELECT data FROM records WHERE id=?',(rid,)).fetchone()[0]);assert raw['category']=='No bautizado' and raw['status']=='Activo'
+    assert client.post(f'/records/{rid}/delete',data=dict(csrf=csrf)).status_code==302
+    assert member.get('/mi-datos').status_code==302
+
+
+def test_depec_member_aggregation_and_event_filter(client,app):
+    login(client)
+    page=client.get('/panel?group=1').get_data(as_text=True)
+    assert 'Caja propia DEPEC' in page and 'No bautizados' in page and 'SEC Jorge Chávez' in page
+    assert client.get('/manage/members/new?group=1').status_code==200
+    page=client.get('/manage/events').get_data(as_text=True)
+    assert page.count('class="filterbar"')==1 and 'Incluir finalizados' in page
+    assert 'registry.css' in page
+
+
+def test_overview_is_fixed_to_leader_scope_and_has_no_picker(client,app):
+    login(client,'israel@depec.demo')
+    page=client.get('/panel?group=3').get_data(as_text=True)
+    assert 'Resumen por iglesia' not in page
+    assert 'SEC Jorge Chávez' not in page
+    assert 'class="filterbar"' not in page
+    assert 'overview-church-grid' in page and 'SEC Israel' in page
+    depec=app.test_client();login(depec,'presidencia@depec.demo')
+    page=depec.get('/panel?group=3').get_data(as_text=True)
+    assert 'Resumen por iglesia' in page and 'SEC Jorge Chávez' in page and 'GJ Rosales' in page
+    assert 'class="filterbar"' not in page
+    listing=depec.get('/manage/events').get_data(as_text=True)
+    assert 'Todas mis organizaciones' not in listing
+
+
+def test_member_switch_is_csp_compatible(client,app):
+    login(client,'israel@depec.demo')
+    response=client.get('/manage/members')
+    page=response.get_data(as_text=True)
+    assert 'data-member-switch' in page and 'onchange=' not in page
+    assert "script-src 'self'" in response.headers['Content-Security-Policy']
+    script=client.get('/static/app.js').get_data(as_text=True)
+    assert "querySelectorAll('[data-member-switch]')" in script

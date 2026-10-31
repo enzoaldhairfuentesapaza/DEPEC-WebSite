@@ -202,19 +202,7 @@ def register_community(app, services):
 
     @bp.route('/solicitar-registro',methods=['GET','POST'])
     def join():
-        submitted=False
-        if request.method=='POST':
-            try:
-                name=request.form.get('name','').strip();email=request.form.get('email','').strip().lower();password=request.form.get('password','');gid=request.form.get('group_id',type=int)
-                if not name or len(name)>120 or len(password)<12 or len(password)>200 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise ValueError('Revisa el nombre, correo y contraseña de al menos 12 caracteres.')
-                group=db().execute('SELECT * FROM groups WHERE id=? AND active=1 AND kind IN (\'SEC\',\'GJ\')',(gid,)).fetchone()
-                if not group:raise ValueError('Selecciona tu SEC o GJ.')
-                uid=db().execute('INSERT INTO users(name,email,password,active) VALUES(?,?,?,0)',(name,email,generate_password_hash(password))).lastrowid
-                db().execute('INSERT INTO memberships(user_id,group_id,created) VALUES(?,?,?)',(uid,gid,now()));db().commit();submitted=True
-            except sqlite3.IntegrityError:
-                db().rollback();flash('Ya existe una solicitud o cuenta con ese correo. Consulta a tus líderes.','error')
-            except ValueError as exc:flash(str(exc),'error')
-        return render_template('join.html',public_page=True,submitted=submitted)
+        return app.extensions['member_registry']['editor'](join=True)
 
     @bp.route('/mi-comunidad',methods=['GET','POST'])
     @logged

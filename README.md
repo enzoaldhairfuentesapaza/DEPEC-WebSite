@@ -1,6 +1,6 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.5.2 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.6.1 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
 
 ## Funciones del sistema
 
@@ -85,10 +85,10 @@ Los integrantes, montos y actividades son ficticios. Las descripciones y horario
 ## Qué puedes probar
 
 - **Página pública:** directorio de los seis grupos, página por grupo, calendario público, noticias, afiches y galería.
-- **Panel privado:** resumen de miembros, encuentros, saldo aprobado, tareas y entregas pendientes.
+- **Panel privado:** totales de integrantes, bautizados/no bautizados, activos/no activos, líderes y directiva; recuento por iglesia y próximo evento por organización. DEPEC agrega los integrantes de sus iglesias y muestra únicamente su caja propia.
 - **Calendario:** vista mensual, navegación entre meses, filtros y colores por organización; eventos de varios días y detalles desplegables.
-- **Eventos:** crear, consultar, editar y eliminar, con organización predeterminada según el cargo, ayudas en los campos y vista previa lateral. Estado Programado o Por programar, ubicación manual o local de iglesia, imagen opcional y orientación automática/vertical/horizontal mediante selector segmentado.
-- **Miembros:** padrón privado, bautismo, contacto, apoderado, fechas, estado y observaciones.
+- **Eventos:** crear, consultar, editar y eliminar, con organización predeterminada según el cargo, ayudas en los campos, invitaciones compactas y vista previa lateral completa sin desplazamiento interno. Los filtros se reúnen en una barra; finalizados ocultos por defecto y opción para incluirlos atenuados. Estado Programado o Por programar, ubicación manual o local de iglesia, imagen opcional y orientación automática/vertical/horizontal mediante selector segmentado.
+- **Miembros:** padrón privado vinculado a cuentas, correo, foto opcional, descripción, contacto, apoderado, fechas y switches de bautismo y actividad en el formulario y el listado. Registro público con aprobación o registro por líderes; edición personal en Mi datos, contraseñas protegidas y eliminación por líderes.
 - **Cumpleaños:** listado privado mensual. El indicador de compartir se registra, pero no publica cumpleaños en la web.
 - **Secretaría:** actas, credenciales, planes, informes, archivos privados y estados documentales.
 - **Entregas:** solicitudes documentales por grupo, fecha límite, archivo de respuesta y observaciones.
@@ -179,6 +179,12 @@ En una instalación nueva:
 
 No ejecutes `seed-demo` ni el arranque automático de demo en esa instalación. Crea SEC/GJ y usuarios desde Organización. Este modo crea únicamente DEPEC; no carga cuentas ni actividades ficticias. Define `SECRET_KEY` como secreto de entorno si deseas reemplazar la clave local autogenerada.
 
+## Cultos juveniles y calendario
+
+Desde Calendario, abre «Cultos juveniles» para configurar día y hora semanal. Pulsa «Tema / cancelar» en una fecha para añadir una temática o cancelar ese culto con un motivo. Restablecer recupera el horario habitual. Estos cultos se muestran públicamente y no crean eventos. Jorge Chávez incluye como ejemplo los domingos a las 15:30. DEPEC no tiene culto ni local propios.
+
+Las acciones de registros son compactas y «Ver» abre la tarjeta sobre la misma pantalla. Se incorporó el logo IEP como icono de la pestaña.
+
 ## Destinatarios de eventos
 
 - **Toda la DEPEC:** visible públicamente en las páginas y calendarios de la DEPEC y sus iglesias.
@@ -186,7 +192,7 @@ No ejecutes `seed-demo` ni el arranque automático de demo en esa instalación. 
 - **Iglesias invitadas:** requiere iniciar sesión; acceden líderes y miembros aprobados de las iglesias seleccionadas, además de la organización anfitriona y la directiva DEPEC.
 - **Solo líderes de mi organización:** acceso reservado a su directiva y a la supervisión DEPEC.
 
-Cada iglesia registra eventos únicamente a su nombre. Su panel muestra información de su iglesia y eventos accesibles de DEPEC; la directiva DEPEC mantiene la administración general. Los controles de imagen y formato están sobre la vista previa; los botones **?** junto a los campos explican cómo completarlos.
+Cada iglesia registra eventos únicamente a su nombre. Su panel muestra información de su iglesia y eventos accesibles de DEPEC; la directiva DEPEC mantiene la administración general. Los controles de imagen y formato están sobre la vista previa; la ayuda aparece al pasar el cursor por los títulos de los campos.
 
 ## Estado y límites
 

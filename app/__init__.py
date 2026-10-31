@@ -109,10 +109,14 @@ def create_app(test_config=None):
         return bool(leader_groups & recipients or member and member['group_id'] in recipients)
 
     def records(module, scope=None, public=False):
+        if scope==1 and (module=='members' or module=='events' and not public and g.user and (g.user['admin'] or roles_for(1))):scope=None
         rows=db().execute('SELECT records.*,groups.name group_name,groups.color,groups.kind group_kind FROM records JOIN groups ON groups.id=group_id WHERE module=? ORDER BY records.id DESC',(module,)).fetchall()
         result=[]
         for row in rows:
             item=dict(row); item['d']=json.loads(row['data'])
+            if module=='members':
+                if item['group_id']==1:continue
+                if db().execute("SELECT 1 FROM member_accounts a JOIN memberships ms ON ms.user_id=a.user_id WHERE a.record_id=? AND ms.status!='Aprobado'",(item['id'],)).fetchone():continue
             if module=='announcements':item['d']['display_status']=announcement_state(item['d'])
             if module=='events':
                 gr=db().execute('SELECT * FROM groups WHERE id=?',(item['group_id'],)).fetchone()
@@ -144,7 +148,7 @@ def create_app(test_config=None):
         def wrapped(*args,**kwargs):
             if not g.user:
                 return redirect(url_for('login'))
-            if not community['is_leader']() and db().execute('SELECT 1 FROM memberships WHERE user_id=?',(g.user['id'],)).fetchone() and request.endpoint not in ['dashboard','account','community.member_home','retro.member_profile']:
+            if not community['is_leader']() and db().execute('SELECT 1 FROM memberships WHERE user_id=?',(g.user['id'],)).fetchone() and request.endpoint not in ['dashboard','account','community.member_home','retro.member_profile','member_self','member_photo']:
                 abort(403)
             return fn(*args,**kwargs)
         return wrapped
@@ -248,13 +252,24 @@ def create_app(test_config=None):
     @logged
     def dashboard():
         if not community['is_leader']() and db().execute("SELECT 1 FROM memberships WHERE user_id=? AND status='Aprobado'",(g.user['id'],)).fetchone():return redirect(url_for('community.member_home'))
-        scope=request.args.get('group',type=int)
+        scope=default_event_group()
         members=records('members',scope); events=records('events',scope)
-        money=records('finance',scope)
+        depec_summary=bool(g.user['admin'] or roles_for(1)) and scope in [None,1]
+        if depec_summary:
+            members=[dict(id=r['id'],group_id=r['group_id'],d=json.loads(r['data'])) for r in db().execute("SELECT id,group_id,data FROM records WHERE module='members' AND group_id!=1")]
+            events=records('events')
+        members=[r for r in members if not db().execute("SELECT 1 FROM member_accounts a JOIN memberships ms ON ms.user_id=a.user_id WHERE a.record_id=? AND ms.status!='Aprobado'",(r['id'],)).fetchone()]
+        money=([dict(d=json.loads(r['data'])) for r in db().execute("SELECT data FROM records WHERE module='finance' AND group_id=1")] if depec_summary else records('finance',scope))
         balance=sum((Decimal(r['d'].get('amount','0'))*(1 if r['d'].get('category')=='Ingreso' else -1) for r in money if r['d'].get('status')=='Aprobado'),Decimal(0))
-        upcoming=sorted([r for r in events if r['d'].get('date','')[:10]>=date.today().isoformat() and r['d'].get('status')!='Cancelado'], key=lambda r:r['d']['date'])
+        upcoming=sorted([r for r in events if r['d'].get('date','')[:10]>=local_now().date().isoformat() and r['d'].get('display_status',r['d'].get('status')) not in ['Cancelado','Finalizado','Realizado']], key=lambda r:r['d']['date'])
         pending=[r for r in records('requests',scope)+records('tasks',scope) if r['d'].get('status') in ['Pendiente','Observado','En proceso']]
-        return render_template('dashboard.html',members=members,events=upcoming,money=money,balance=balance,pending=pending)
+        summary=dict(total=len(members),baptized=sum(r['d'].get('category')=='Bautizado' for r in members),unbaptized=sum(r['d'].get('category')!='Bautizado' for r in members),active=sum(r['d'].get('status')=='Activo' for r in members),inactive=sum(r['d'].get('status')!='Activo' for r in members))
+        assignments=db().execute('SELECT a.* FROM assignments a JOIN users u ON u.id=a.user_id WHERE a.active=1 AND u.active=1').fetchall()
+        summary['leaders']=len({a['user_id'] for a in assignments if depec_summary or a['group_id']==scope})
+        summary['board']=len({a['user_id'] for a in assignments if a['group_id']==(1 if depec_summary else scope or default_event_group()) and a['role']!='Líder'})
+        church_counts=[dict(id=gr['id'],name=gr['name'],count=sum(r['group_id']==gr['id'] for r in members),color=gr['color']) for gr in db().execute('SELECT * FROM groups WHERE active=1 AND id!=1') if depec_summary or allowed(gr['id'],'members')]
+        next_by_group=[dict(id=gr['id'],color=gr['color'],name=gr['name'],count=sum(r['group_id']==gr['id'] for r in members),baptized=sum(r['group_id']==gr['id'] and r['d'].get('category')=='Bautizado' for r in members),active=sum(r['group_id']==gr['id'] and r['d'].get('status')=='Activo' for r in members),event=next((r for r in upcoming if r['group_id']==gr['id']),None)) for gr in db().execute('SELECT * FROM groups WHERE active=1') if depec_summary or gr['id']==scope]
+        return render_template('dashboard.html',current_scope=scope,brand_group=db().execute('SELECT * FROM groups WHERE id=?',(scope,)).fetchone(),summary=summary,church_counts=church_counts,next_by_group=next_by_group,dashboard_scope=scope,depec_summary=depec_summary,members=members,events=upcoming,money=money,balance=balance,pending=pending)
 
     @app.get('/calendar')
     def calendar_view():
@@ -274,7 +289,7 @@ def create_app(test_config=None):
         if event_id:
             selected_event=next((ev for ev in events if ev['id']==event_id),None)
             if not selected_event:abort(404)
-        return render_template('calendar.html',selected_event=selected_event,events=events,weeks=weeks,first=first,previous=previous,following=following,month_name=names[first.month-1],public_page=public_mode)
+        return render_template('calendar.html',worship_days=worship_occurrences(weeks,scope,not public_mode),worship_groups=[dict(gr) for gr in db().execute("SELECT * FROM groups WHERE active=1 AND id!=1") if allowed(gr['id'],'events',True)],selected_event=selected_event,events=events,weeks=weeks,first=first,previous=previous,following=following,month_name=names[first.month-1],public_page=public_mode)
 
     @app.get('/birthdays')
     @logged
@@ -304,10 +319,12 @@ def create_app(test_config=None):
     @logged
     def listing(module):
         if module not in MODULES: abort(404)
-        scope=request.args.get('group',type=int)
+        scope=request.args.get('group',type=int) or default_event_group()
+        if module=='members':return member_registry['listing'](scope)
         if module=='events' and 'group' not in request.args:scope=default_event_group()
         if scope and not allowed(scope,module):abort(403)
         items=records(module,scope)
+        if module=='events' and request.args.get('completed')!='1' and request.args.get('status')!='Finalizado':items=[r for r in items if r['d'].get('display_status',r['d'].get('status'))!='Finalizado']
         q=request.args.get('q','').casefold()
         status=request.args.get('status','')
         items=[r for r in items if q in ' '.join(str(v) for k,v in r['d'].items() if k!='attachment').casefold() and (not status or r['d'].get('display_status',r['d'].get('status'))==status or r['d'].get('status')==status)]
@@ -392,6 +409,7 @@ def create_app(test_config=None):
     @logged
     def edit(module,record_id=None):
         if module not in MODULES: abort(404)
+        if module=='members':return member_registry['editor'](record_id)
         item=get_record(record_id) if record_id else None
         if item and item['module']!=module: abort(404)
         if item and not allowed(item['group_id'],module,True): abort(403)
@@ -443,6 +461,7 @@ def create_app(test_config=None):
     def delete(record_id):
         item=get_record(record_id)
         if not allowed(item['group_id'],item['module'],True): abort(403)
+        if item['module']=='members':member_registry['detach'](record_id)
         db().execute('DELETE FROM media_files WHERE record_id=?',(record_id,))
         db().execute('DELETE FROM records WHERE id=?',(record_id,))
         audit(f'Eliminó {item["module"]} #{record_id}',item['group_id']); db().commit()
@@ -635,5 +654,10 @@ def create_app(test_config=None):
         if len(password)<12: raise click.ClickException('Usa 12 caracteres como mínimo.')
         db().execute('INSERT INTO users(name,email,password,admin) VALUES(?,?,?,1)',(name,email.lower(),generate_password_hash(password))); db().commit(); click.echo('Administrador creado.')
 
+    from .worship import register_worship
+    worship_occurrences=register_worship(app,db,allowed,logged)
+    from .member_registry import register_members
+    member_registry=register_members(app,db,allowed,logged,records,get_record,now,audit)
+    app.extensions['member_registry']=member_registry
     community=register_community(app,dict(db=db,allowed=allowed,logged=logged,audit=audit,now=now,roles_for=roles_for,get_record=get_record,event_access=event_access))
     return app
