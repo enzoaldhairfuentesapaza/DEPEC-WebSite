@@ -134,3 +134,28 @@ if (announcementBoard) {
   if (announcementBoard.isConnected) announcementInterval = window.setInterval(tickAnnouncements,1000);
   document.addEventListener('visibilitychange', () => { if (announcementBoard.isConnected) tickAnnouncements(); });
 }
+
+// Las ayudas se abren con teclado y también funcionan sin JavaScript.
+document.addEventListener('click',event => {
+  document.querySelectorAll('.field-help[open]').forEach(help => { if(!help.contains(event.target)) help.open=false; });
+});
+document.addEventListener('keydown',event => {
+  if(event.key==='Escape') document.querySelectorAll('.field-help[open]').forEach(help => {help.open=false;help.querySelector('summary')?.focus();});
+});
+// Formularios específicos (identidad, contacto, etc.): notas junto al campo como ayuda opcional.
+document.querySelectorAll('form label').forEach((label,index) => {
+  if(label.closest('.format-switch,.avatar-options,.invited-churches,.role-lab') || label.closest('.field-caption')) return;
+  const control=label.querySelector('input,select,textarea');
+  if(!control || ['checkbox','radio','hidden'].includes(control.type)) return;
+  const text=[...label.childNodes].filter(node=>node.nodeType===3).map(node=>node.textContent.trim()).join(' ').trim();
+  if(!text) return;
+  const notes=[...label.querySelectorAll('small')];
+  const helpText=notes.map(note=>note.textContent).join(' ') || (control.type==='password' ? 'Escribe tu contraseña. Respeta las mayúsculas y minúsculas.' : control.type==='email' ? 'Escribe un correo válido, por ejemplo nombre@dominio.com.' : control.type==='color' ? 'Selecciona el color representativo de esta organización.' : 'Completa '+text.toLowerCase()+'.');
+  const wrapper=document.createElement('div');wrapper.className='form-field '+label.className;
+  const caption=document.createElement('div');caption.className='field-caption';
+  const title=document.createElement('label');control.id ||= 'guided-field-'+index;title.htmlFor=control.id;title.textContent=text;
+  const help=document.createElement('details');help.className='field-help';const summary=document.createElement('summary');summary.textContent='?';summary.setAttribute('aria-label','Ayuda: '+text);
+  const body=document.createElement('div');body.textContent=helpText;body.setAttribute('role','note');help.append(summary,body);caption.append(title,help);
+  label.before(wrapper);wrapper.append(caption);
+  [...label.children].filter(child=>child.tagName!=='SMALL').forEach(child=>wrapper.append(child));label.remove();
+});

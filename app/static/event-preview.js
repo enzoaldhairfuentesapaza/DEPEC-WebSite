@@ -9,6 +9,8 @@ document.querySelectorAll('[data-event-editor]').forEach(form => {
   let source = config.original, width = Number(config.width), height = Number(config.height);
   let objectUrl, generation = 0;
   const update = () => {
+    const invites=form.querySelector('[data-invite-picker]');
+    if(invites) invites.hidden=value('audience')!=='Iglesias invitadas';
     const mode = value('image_mode'), layout = value('card_layout');
     const preset = value('generic_image') || 'Encuentro';
     const generic = mode === 'Imagen genérica';
@@ -30,8 +32,8 @@ document.querySelectorAll('[data-event-editor]').forEach(form => {
       if (img.getAttribute('src') !== src) img.src = src;
       picture.querySelector('.file-kind').textContent = generic ? 'Imagen genérica' : value('media_kind') || 'Afiche';
     } else picture?.remove();
-    field('generic_image').closest('label').hidden = !generic;
-    field('attachment').closest('label').hidden = mode !== 'Imagen propia';
+    field('generic_image').closest('[data-field]').hidden = !generic;
+    field('attachment').closest('[data-field]').hidden = mode !== 'Imagen propia';
     const group = field('group_id').selectedOptions[0];
     card.style.setProperty('--church',group.dataset.color);
     card.style.setProperty('--on-church',group.dataset.contrast);

@@ -1154,5 +1154,80 @@ def test_pending_event_without_dates_and_church_venue(client,app):
     assert client.post('/manage/events/new',data=data).status_code==200
     assert client.get(f'/events/{rid}/preview').status_code==200
     other=app.test_client();login(other,'israel@depec.demo')
-    assert other.get(f'/events/{rid}/preview').status_code==403
+    assert other.get(f'/events/{rid}/preview').status_code==200  # Church leaders can consult public DEPEC events.
     assert client.get('/manage/events?group=1&status=Por+programar').status_code==200
+
+
+def test_event_audience_controls_and_church_boundaries(client,app):
+    csrf=login(client,'israel@depec.demo')
+    page=client.get('/manage/events/new').get_data(as_text=True)
+    assert 'El local de tu iglesia se completa por defecto.' not in page
+    assert 'field-help' in page and 'Iglesias invitadas' in page
+    right=page.split('class="preview-controls"')[1]
+    for name in ['image_mode','generic_image','attachment','card_layout']:
+        assert f'name="{name}"' in right.split('id="event-preview-title"')[0]
+    # Even a manually granted foreign permission cannot change church ownership.
+    with client.session_transaction() as session:uid=session['uid']
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("INSERT INTO grants(user_id,group_id,module,can_write,active) VALUES(?,3,'events',1,1)",(uid,))
+    data=payload();data.update(csrf=csrf,group_id='3')
+    assert client.post('/manage/events/new',data=data).status_code==403
+    assert client.get('/manage/events?group=3').status_code==403
+    assert client.get('/manage/events?group=1').status_code==200
+    assert client.get('/manage/finance?group=1').status_code==403
+
+
+def test_event_audience_distribution_and_private_invites(client,app):
+    csrf=login(client)
+    ids={}
+    for audience in ['Toda la DEPEC','Público de mi iglesia','Iglesias invitadas','Solo líderes de mi organización']:
+        data=payload();data.pop('visibility');data.update(csrf=csrf,group_id='1' if audience.startswith('Solo') else '3',title=audience,audience=audience,invited_groups='2')
+        assert client.post('/manage/events/new',data=data).status_code==302
+        with sqlite3.connect(app.config['DATABASE']) as db:
+            rid,raw=db.execute("SELECT id,data FROM records WHERE module='events' ORDER BY id DESC LIMIT 1").fetchone()
+            ids[audience]=rid
+            assert json.loads(raw)['visibility']==('internal' if audience in ['Iglesias invitadas','Solo líderes de mi organización'] else 'public')
+    anonymous=app.test_client()
+    public=anonymous.get('/calendar?public=1&group=2').get_data(as_text=True)
+    assert 'Toda la DEPEC' in public and 'Público de mi iglesia' not in public and 'Iglesias invitadas' not in public
+    owner=anonymous.get('/calendar?public=1&group=3').get_data(as_text=True)
+    assert 'Público de mi iglesia' in owner
+    israel=app.test_client();login(israel,'israel@depec.demo')
+    invited=israel.get('/calendar?public=1&group=2').get_data(as_text=True)
+    assert 'Iglesias invitadas' in invited
+    assert israel.get(f"/events/{ids['Solo líderes de mi organización']}/preview").status_code==403
+    # Enforcing invitations does not depend on hiding a field in the browser.
+    data=payload();data.pop('visibility');data.update(csrf=csrf,audience='Iglesias invitadas')
+    assert client.post('/manage/events/new',data=data).status_code==200
+
+
+def test_private_invited_event_media_requires_approved_recipient(client,app):
+    csrf=login(client)
+    data=payload();data.pop('visibility');data.update(csrf=csrf,group_id='3',title='Adjunto reservado de invitación',audience='Iglesias invitadas',invited_groups='2',image_mode='Imagen propia',attachment=image_upload())
+    assert client.post('/manage/events/new',data=data).status_code==302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        rid=db.execute("SELECT max(id) FROM records WHERE module='events'").fetchone()[0]
+        mid=db.execute('SELECT id FROM media_files WHERE record_id=?',(rid,)).fetchone()[0]
+    anonymous=app.test_client()
+    assert anonymous.get(f'/media/{rid}').status_code==403
+    assert anonymous.get(f'/archivos/{mid}').status_code==403
+    invited=app.test_client();login(invited,'israel@depec.demo')
+    assert invited.get(f'/media/{rid}').status_code==200
+    assert invited.get(f'/archivos/{mid}').status_code==200
+    # A member needs approval, and must belong to an invited organization.
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        uid=db.execute("SELECT id FROM users WHERE email='israel@depec.demo'").fetchone()[0]
+        db.execute('UPDATE assignments SET active=0 WHERE user_id=?',(uid,))
+        db.execute("INSERT INTO memberships(user_id,group_id,status,created) VALUES(?,2,'Pendiente','2026-01-01')",(uid,))
+    assert invited.get(f'/archivos/{mid}').status_code==403
+    with sqlite3.connect(app.config['DATABASE']) as db:db.execute("UPDATE memberships SET status='Aprobado' WHERE user_id=?",(uid,))
+    assert invited.get(f'/archivos/{mid}').status_code==200
+    with sqlite3.connect(app.config['DATABASE']) as db:db.execute('UPDATE memberships SET group_id=4 WHERE user_id=?',(uid,))
+    assert invited.get(f'/media/{rid}').status_code==403
+
+
+def test_church_media_panel_does_not_list_depec_private_albums(client,app):
+    csrf=login(client);create_album(client,csrf,1,'Álbum privado exclusivo DEPEC','internal')
+    login(client,'israel@depec.demo')
+    page=client.get('/panel/archivos').get_data(as_text=True)
+    assert 'Álbum privado exclusivo DEPEC' not in page

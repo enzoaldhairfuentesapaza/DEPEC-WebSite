@@ -1,6 +1,6 @@
 # DEPEC — Comunidad y gestión
 
-Prototipo funcional v0.5.1 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Prototipo funcional v0.5.2 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
 
 ## Funciones del sistema
 
@@ -178,6 +178,15 @@ En una instalación nueva:
 ```
 
 No ejecutes `seed-demo` ni el arranque automático de demo en esa instalación. Crea SEC/GJ y usuarios desde Organización. Este modo crea únicamente DEPEC; no carga cuentas ni actividades ficticias. Define `SECRET_KEY` como secreto de entorno si deseas reemplazar la clave local autogenerada.
+
+## Destinatarios de eventos
+
+- **Toda la DEPEC:** visible públicamente en las páginas y calendarios de la DEPEC y sus iglesias.
+- **Público de mi iglesia:** visible públicamente en la página de la iglesia organizadora. No exige iniciar sesión.
+- **Iglesias invitadas:** requiere iniciar sesión; acceden líderes y miembros aprobados de las iglesias seleccionadas, además de la organización anfitriona y la directiva DEPEC.
+- **Solo líderes de mi organización:** acceso reservado a su directiva y a la supervisión DEPEC.
+
+Cada iglesia registra eventos únicamente a su nombre. Su panel muestra información de su iglesia y eventos accesibles de DEPEC; la directiva DEPEC mantiene la administración general. Los controles de imagen y formato están sobre la vista previa; los botones **?** junto a los campos explican cómo completarlos.
 
 ## Estado y límites
 

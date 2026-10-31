@@ -46,6 +46,7 @@ def register_community(app, services):
         if item['record_id']:
             record=services['get_record'](item['record_id']);d=record['d']
             if d.get('visibility')!='public':return False
+            if record['module']=='events' and not services['event_access'](record,public=True):return False
             if record['module']=='events' and d.get('image_mode') in ['Sin imagen','Imagen genérica']:return False
             if record['module'] in ['posts','gallery'] and (d.get('status')!='Publicado' or (record['module']=='posts' and d.get('date','')>now())):return False
         return True
@@ -131,7 +132,13 @@ def register_community(app, services):
     def asset(file_id):
         item=db().execute('SELECT * FROM media_files WHERE id=?',(file_id,)).fetchone()
         if not item:abort(404)
-        if not file_visible(item) and not (g.user and (item['uploaded_by']==g.user['id'] or allowed(item['group_id'],'gallery'))):abort(403)
+        event_permission=False
+        if item['record_id']:
+            record=services['get_record'](item['record_id'])
+            if record['module']=='events':
+                if not services['event_access'](record):abort(403)
+                event_permission=record['d'].get('image_mode') not in ['Sin imagen','Imagen genérica'] and (item['visibility']=='public' or bool(g.user and record['d'].get('visibility')=='internal'))
+        if not event_permission and not file_visible(item) and not (g.user and (item['uploaded_by']==g.user['id'] or allowed(item['group_id'],'gallery'))):abort(403)
         base=Path(app.static_folder) if item['static_name'] else Path(app.config['UPLOAD_FOLDER'])
         return send_file(base/(item['static_name'] or item['filename']))
 
@@ -149,8 +156,8 @@ def register_community(app, services):
     @logged
     def files():
         if not is_leader():abort(403)
-        scopes=[dict(r) for r in db().execute('SELECT * FROM groups WHERE active=1') if allowed(r['id'],'events')]
-        all_albums=[dict(r) for r in db().execute('SELECT * FROM albums ORDER BY id DESC') if (r['group_id']==1 and (r['visibility']=='public' or allowed(1,'events'))) or allowed(r['group_id'],'events')]
+        scopes=[dict(r) for r in db().execute('SELECT * FROM groups WHERE active=1') if allowed(r['id'],'gallery')]
+        all_albums=[dict(r) for r in db().execute('SELECT * FROM albums ORDER BY id DESC') if (r['group_id']==1 and (r['visibility']=='public' or allowed(1,'gallery'))) or allowed(r['group_id'],'gallery')]
         if request.method=='POST':
             try:
                 action=request.form['action'];gid=int(request.form.get('group_id','0'))
@@ -190,7 +197,7 @@ def register_community(app, services):
                 db().commit();flash('Cambios guardados.','success');return redirect(url_for('community.files'))
             except (ValueError,KeyError) as exc:
                 db().rollback();flash(str(exc),'error')
-        items=[dict(r) for r in db().execute('SELECT m.*,u.name uploader,gr.name church_name,a.title album_title FROM media_files m JOIN users u ON u.id=m.uploaded_by JOIN groups gr ON gr.id=m.group_id LEFT JOIN albums a ON a.id=m.album_id ORDER BY m.id DESC') if allowed(r['group_id'],'events') or (r['album_id'] and file_visible(r) and any(a['id']==r['album_id'] and a['group_id']==1 for a in all_albums))]
+        items=[dict(r) for r in db().execute('SELECT m.*,u.name uploader,gr.name church_name,a.title album_title FROM media_files m JOIN users u ON u.id=m.uploaded_by JOIN groups gr ON gr.id=m.group_id LEFT JOIN albums a ON a.id=m.album_id ORDER BY m.id DESC') if allowed(r['group_id'],'gallery') or (r['album_id'] and file_visible(r) and any(a['id']==r['album_id'] and a['group_id']==1 for a in all_albums))]
         return render_template('files.html',items=items,scopes=scopes,all_albums=all_albums)
 
     @bp.route('/solicitar-registro',methods=['GET','POST'])

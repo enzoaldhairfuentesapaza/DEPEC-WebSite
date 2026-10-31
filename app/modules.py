@@ -45,3 +45,8 @@ for key,config in MODULES.items():
         if field['key']=='attachment' and key=='gallery':field['help']='Adjunta la fotografía del registro en PNG o JPG. Máximo 10 MB.'
         if field['key']=='end_date' and key=='announcements':field['help']='Día y hora de Perú en que el anuncio se ocultará automáticamente.'
         if field['key']=='status' and key=='events':field['help']='Programado: fechas confirmadas. Por programar: todavía sin fecha definitiva. Reprogramado: hubo un cambio de fecha.'
+
+EVENT_AUDIENCE_HELP="Toda la DEPEC: evento público mostrado en la página general y las iglesias. Público de mi iglesia: aparece en la página pública de la iglesia organizadora; cualquiera con el enlace puede verlo. Iglesias invitadas: solo los miembros aprobados y líderes de las iglesias seleccionadas, y la organización anfitriona, después de iniciar sesión. Solo líderes: privado para la directiva de la organización; la directiva DEPEC conserva su acceso de supervisión."
+for field in MODULES['events']['fields']:
+    if field['key']=='visibility':
+        field.update(required=False,key='audience',label='¿A quién está dirigido?',options=['Toda la DEPEC','Público de mi iglesia','Iglesias invitadas','Solo líderes de mi organización'],help=EVENT_AUDIENCE_HELP)

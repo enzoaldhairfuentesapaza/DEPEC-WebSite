@@ -22,6 +22,7 @@ from .community import register_community
 from .announcements import announcement_state
 from .collage import build_event_collage
 from .contact import public_contact
+from .event_audience import AUDIENCES,audience_of,in_event_page
 from .role_lab import TEST_ROLES,create_test_operator,operator_for_session,persona_for
 
 
@@ -77,6 +78,10 @@ def create_app(test_config=None):
             return False
         if g.user['admin']:
             return True
+        owned={row['group_id'] for row in db().execute('SELECT group_id FROM assignments WHERE user_id=? AND active=1',(g.user['id'],))}
+        if 1 not in owned and group_id not in owned:
+            if not write and group_id==1 and module=='events' and owned:return True
+            return False
         grant=db().execute('SELECT max(can_write) FROM grants WHERE user_id=? AND group_id IN (?,1) AND module=? AND active=1',(g.user['id'],group_id,module)).fetchone()[0]
         if grant is not None and (not write or grant): return True
         roles=roles_for(group_id)
@@ -92,6 +97,17 @@ def create_app(test_config=None):
             return True
         return bool({'Secretario','Prosecretario'} & roles)
 
+    def event_access(item,public=False):
+        data=item['d'];owner=item['group_id'];audience=audience_of(data)
+        leader_groups={r['group_id'] for r in db().execute('SELECT group_id FROM assignments WHERE user_id=? AND active=1',(g.user['id'],))} if g.user else set()
+        if not public and g.user and (g.user['admin'] or 1 in leader_groups or owner in leader_groups):return True
+        if audience in ['Toda la DEPEC','Público de mi iglesia']:return data.get('visibility')=='public'
+        if public or not g.user:return False
+        if audience=='Solo líderes de mi organización':return False
+        member=db().execute("SELECT group_id FROM memberships WHERE user_id=? AND status='Aprobado'",(g.user['id'],)).fetchone()
+        recipients=set(data.get('invited_groups',[]))|{owner}
+        return bool(leader_groups & recipients or member and member['group_id'] in recipients)
+
     def records(module, scope=None, public=False):
         rows=db().execute('SELECT records.*,groups.name group_name,groups.color,groups.kind group_kind FROM records JOIN groups ON groups.id=group_id WHERE module=? ORDER BY records.id DESC',(module,)).fetchall()
         result=[]
@@ -101,11 +117,15 @@ def create_app(test_config=None):
             if module=='events':
                 gr=db().execute('SELECT * FROM groups WHERE id=?',(item['group_id'],)).fetchone()
                 item['d']=event_presentation(item['d'],gr)
-            if scope and item['group_id']!=scope:
-                continue
+            if module=='events':
+                if public:
+                    if not in_event_page(item['d'],item['group_id'],scope or 1):continue
+                elif scope and item['group_id']!=scope:continue
+                if not event_access(item):continue
+            elif scope and item['group_id']!=scope:continue
             if public:
                 d=item['d']
-                if d.get('visibility')!='public' or (module in ['posts','gallery'] and (d.get('status')!='Publicado' or (module=='posts' and d.get('date','')>now()))):
+                if (module!='events' and d.get('visibility')!='public') or (module in ['posts','gallery'] and (d.get('status')!='Publicado' or (module=='posts' and d.get('date','')>now()))):
                     continue
             elif not allowed(item['group_id'],module):
                 continue
@@ -266,8 +286,8 @@ def create_app(test_config=None):
         return render_template('birthdays.html',public_page=False,**calendar_data)
 
     def default_event_group():
+        if g.user['admin'] or roles_for(1):return 1
         if g.get('test_operator') and session.get('test_group') and allowed(session['test_group'],'events'):return session['test_group']
-        if g.user['admin']:return 1
         row=db().execute('SELECT group_id FROM assignments WHERE user_id=? AND active=1 ORDER BY CASE WHEN group_id=1 THEN 0 ELSE 1 END,id LIMIT 1',(g.user['id'],)).fetchone()
         return row['group_id'] if row else 1
 
@@ -275,7 +295,7 @@ def create_app(test_config=None):
     @logged
     def event_preview(record_id):
         item=get_record(record_id)
-        if item['module']!='events' or not allowed(item['group_id'],'events'):abort(403)
+        if item['module']!='events' or not allowed(item['group_id'],'events') or not event_access(item):abort(403)
         group=db().execute('SELECT * FROM groups WHERE id=?',(item['group_id'],)).fetchone()
         item.update(group_name=group['name'],color=group['color'],d=event_presentation(item['d'],group))
         return render_template('event_detail.html',event=item)
@@ -286,6 +306,7 @@ def create_app(test_config=None):
         if module not in MODULES: abort(404)
         scope=request.args.get('group',type=int)
         if module=='events' and 'group' not in request.args:scope=default_event_group()
+        if scope and not allowed(scope,module):abort(403)
         items=records(module,scope)
         q=request.args.get('q','').casefold()
         status=request.args.get('status','')
@@ -294,10 +315,11 @@ def create_app(test_config=None):
 
     def validate(module, group_id, existing=None):
         data=dict(existing or {})
+        if module=='events' and request.form.get('visibility','public') not in ['public','internal']:raise ValueError('Visibilidad inválida.')
         for field in MODULES[module]['fields']:
             key=field['key']; kind=field['kind']
             if kind=='file': continue
-            value=request.form.get(key, data.get(key,'') if module=='events' and key in ['card_layout','image_mode','generic_image'] else '').strip()
+            value=request.form.get(key, data.get(key,'public') if module=='events' and key=='visibility' else data.get(key,'') if module=='events' and key in ['card_layout','image_mode','generic_image','audience'] else '').strip()
             if field['required'] and not value: raise ValueError('Completa '+field['label']+'.')
             if len(value)>12000: raise ValueError('Texto demasiado largo.')
             if kind=='select' and value and value not in field['options']: raise ValueError('Opción inválida.')
@@ -334,6 +356,16 @@ def create_app(test_config=None):
             for key in ['date','end_date']:
                 if data.get(key) and datetime.fromisoformat(data[key]).tzinfo:raise ValueError('Usa la hora local de Perú.')
             data['media_kind']=data.get('media_kind') or 'Afiche'
+            audience=request.form.get('audience') or (('Solo líderes de mi organización' if request.form['visibility']=='internal' else 'Toda la DEPEC') if 'visibility' in request.form else data.get('audience') or 'Toda la DEPEC')
+            if audience not in AUDIENCES:raise ValueError('Destinatarios inválidos.')
+            invited=[]
+            for raw in request.form.getlist('invited_groups'):
+                gid=int(raw)
+                if not db().execute("SELECT 1 FROM groups WHERE id=? AND active=1 AND kind!='DEPEC'",(gid,)).fetchone():raise ValueError('Iglesia invitada inválida.')
+                invited.append(gid)
+            if audience=='Iglesias invitadas' and not invited:raise ValueError('Selecciona al menos una iglesia invitada.')
+            data['audience']=audience;data['invited_groups']=sorted(set(invited)) if audience=='Iglesias invitadas' else []
+            data['visibility']='internal' if audience in ['Iglesias invitadas','Solo líderes de mi organización'] else 'public'
         if module=='events' and data['end_date']<data['date']: raise ValueError('La finalización debe ser posterior al inicio.')
         if module=='members' and data['date']>date.today().isoformat(): raise ValueError('La fecha de nacimiento no puede ser futura.')
         file=request.files.get('attachment')
@@ -367,6 +399,7 @@ def create_app(test_config=None):
         if not writable: abort(403)
         data=dict(item['d']) if item else {}
         if module=='events':
+            data.setdefault('audience',audience_of(data))
             for key,default in [('card_layout','Automático'),('image_mode','Imagen propia'),('generic_image','Encuentro')]:data.setdefault(key,default)
         group_id=item['group_id'] if item else request.args.get('group',type=int)
         if module=='events' and group_id is None:group_id=default_event_group()
@@ -397,6 +430,7 @@ def create_app(test_config=None):
             except (ValueError,InvalidOperation):
                 flash('Revisa los datos: campos obligatorios, fechas y montos válidos; inicio anterior al fin.','error')
                 data={**data,**request.form.to_dict()}
+                if module=='events':data['invited_groups']=request.form.getlist('invited_groups',type=int)
         preview_event=None
         if module=='events':
             preview_group=next((gr for gr in writable if gr['id']==group_id),writable[0])
@@ -421,7 +455,7 @@ def create_app(test_config=None):
     @logged
     def download(record_id):
         item=get_record(record_id)
-        if not allowed(item['group_id'],item['module']): abort(403)
+        if not allowed(item['group_id'],item['module']) or item['module']=='events' and not event_access(item): abort(403)
         filename=item['d'].get('attachment')
         if not filename: abort(404)
         return send_file(Path(app.config['UPLOAD_FOLDER'])/filename,as_attachment=True,download_name=item['d'].get('attachment_name','documento'))
@@ -432,7 +466,9 @@ def create_app(test_config=None):
         if item['module'] not in ['events','posts','gallery']: abort(404)
         d=item['d']
         is_public=d.get('visibility')=='public' and (item['module']=='events' or (d.get('status')=='Publicado' and (item['module']=='gallery' or d.get('date','')<=now())))
-        if not is_public and not allowed(item['group_id'],item['module']): abort(403)
+        if item['module']=='events':
+            if not event_access(item):abort(403)
+        elif not is_public and not allowed(item['group_id'],item['module']):abort(403)
         if not d.get('attachment'): abort(404)
         return send_file(Path(app.config['UPLOAD_FOLDER'])/d['attachment'])
 
@@ -524,7 +560,12 @@ def create_app(test_config=None):
         assignments=db().execute('SELECT a.*,u.name person,gr.name organization FROM assignments a JOIN users u ON a.user_id=u.id JOIN groups gr ON gr.id=a.group_id ORDER BY a.id DESC').fetchall() if g.user['admin'] else db().execute('SELECT a.*,u.name person,gr.name organization FROM assignments a JOIN users u ON a.user_id=u.id JOIN groups gr ON gr.id=a.group_id WHERE a.active=1').fetchall()
         users=db().execute('SELECT id,name,email,active FROM users').fetchall() if g.user['admin'] else []
         grants=db().execute('SELECT p.*,u.name person,gr.name organization FROM grants p JOIN users u ON u.id=p.user_id JOIN groups gr ON gr.id=p.group_id WHERE p.active=1').fetchall() if g.user['admin'] else []
-        return render_template('organization.html',assignments=assignments,users=users,grants=grants)
+        organization_groups=db().execute('SELECT * FROM groups ORDER BY id').fetchall()
+        if not g.user['admin'] and not roles_for(1):
+            visible={1}|{r['group_id'] for r in db().execute('SELECT group_id FROM assignments WHERE user_id=? AND active=1',(g.user['id'],))}
+            assignments=[a for a in assignments if a['group_id'] in visible]
+            organization_groups=[gr for gr in organization_groups if gr['id'] in visible]
+        return render_template('organization.html',assignments=assignments,users=users,grants=grants,organization_groups=organization_groups)
 
     @app.get('/reports')
     @logged
@@ -594,5 +635,5 @@ def create_app(test_config=None):
         if len(password)<12: raise click.ClickException('Usa 12 caracteres como mínimo.')
         db().execute('INSERT INTO users(name,email,password,admin) VALUES(?,?,?,1)',(name,email.lower(),generate_password_hash(password))); db().commit(); click.echo('Administrador creado.')
 
-    community=register_community(app,dict(db=db,allowed=allowed,logged=logged,audit=audit,now=now,roles_for=roles_for,get_record=get_record))
+    community=register_community(app,dict(db=db,allowed=allowed,logged=logged,audit=audit,now=now,roles_for=roles_for,get_record=get_record,event_access=event_access))
     return app
