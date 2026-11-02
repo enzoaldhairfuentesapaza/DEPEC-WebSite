@@ -143,7 +143,7 @@ document.querySelectorAll('form label').forEach((label,index) => {
   const text=[...label.childNodes].filter(node=>node.nodeType===3).map(node=>node.textContent.trim()).join(' ').trim();
   if(!text) return;
   const notes=[...label.querySelectorAll('small')];
-  const helpText=notes.map(note=>note.textContent).join(' ') || (control.type==='password' ? 'Escribe tu contraseña. Respeta las mayúsculas y minúsculas.' : control.type==='email' ? 'Escribe un correo válido, por ejemplo nombre@dominio.com.' : control.type==='color' ? 'Selecciona el color representativo de esta organización.' : 'Completa '+text.toLowerCase()+'.');
+  const helpText=label.getAttribute('title') || notes.map(note=>note.textContent).join(' ') || (control.type==='password' ? 'Escribe tu contraseña. Respeta las mayúsculas y minúsculas.' : control.type==='email' ? 'Escribe un correo válido, por ejemplo nombre@dominio.com.' : control.type==='color' ? 'Selecciona el color representativo de esta organización.' : 'Completa '+text.toLowerCase()+'.');
   const wrapper=document.createElement('div');wrapper.className='form-field '+label.className;
   const caption=document.createElement('div');caption.className='field-caption';
   const title=document.createElement('label');control.id ||= 'guided-field-'+index;title.htmlFor=control.id;title.textContent=text;

@@ -1,36 +1,37 @@
 # Arquitectura y decisiones
 
-Flask recibe cada solicitud, carga al usuario activo desde SQLite, valida el token CSRF en operaciones POST, verifica el alcance y renderiza HTML con Jinja. JavaScript solo mejora la interfaz; no determina los permisos. Los archivos se guardan fuera de `static/` y se entregan mediante rutas controladas.
+Flask autentica al usuario, valida CSRF en cada POST y renderiza Jinja. JavaScript añade controles y vistas previas, pero no determina permisos. SQLite y los archivos privados están en `instance/`; el ZIP de código no los incluye.
 
-## Datos
+## Dominios
 
-- `groups`: DEPEC tiene id 1 estable; las demás organizaciones son SEC/GJ.
-- `users`: cuentas, hashes de contraseña y estado de acceso.
-- `assignments`: cargos, periodos y estado activo/histórico.
-- `grants`: permisos adicionales de lectura o edición por módulo y organización.
-- `records`: módulo, organización, autor, fechas y datos JSON validados por el formulario del módulo.
-- `participation`: relación de un evento/reunión con miembros del grupo anfitrión.
-- `audit`: acciones del usuario, organización y fecha.
-- `attempts`: intentos de acceso fallidos para limitar ataques de contraseña.
+- `records` conserva eventos, integrantes, movimientos de caja y el archivo previo. Los movimientos monetarios se validan con Decimal y se calculan en céntimos enteros. Se conserva el formato de texto decimal de dos cifras para compatibilidad con la base anterior.
+- `member_accounts` relaciona integrantes con cuentas y `memberships` conserva la aprobación por iglesia.
+- `office_meetings`, `office_invites` y `office_minutes` separan convocatorias, iglesias convocadas y una única acta por reunión.
+- `office_plans` conserva el plan anual local. `office_campaigns` representa la recepción anual DEPEC. `office_plan_deliveries` referencia un archivo concreto e inmutable, sin apuntar implícitamente a una revisión local posterior.
+- `office_credentials` relaciona una reunión con una iglesia invitada y conserva delegados, recepción y observaciones.
+- `office_letters` organiza correspondencia propia y su relación opcional con una reunión de la misma organización.
+- `office_templates` publica modelos comunes. `office_files` conserva cada carga como una versión nueva, con organización, autor, fecha, nombre y recurso propietario.
+- `finance_projects` y `finance_categories` organizan el libro de caja. `finance_debts` conserva la obligación inicial; `finance_settlements` vincula cada pago a un único movimiento financiero.
+- `finance_tokens` evita registrar dos veces un mismo envío. Los pagos utilizan una transacción `BEGIN IMMEDIATE` y validan nuevamente el saldo antes de insertarse.
 
-El JSON permite ampliar formularios rápidamente en el prototipo. Para producción conviene migrar eventos, miembros, movimientos y documentos a tablas propias con restricciones, versiones y migraciones; evaluar PostgreSQL cuando exista concurrencia significativa. Los importes se validan con Decimal y se guardan como texto decimal con dos cifras; no se suman con float en el servidor.
+## Acceso y estados
 
-## Acceso
+La oficina documental identifica la organización efectiva del cargo. Los cargos DEPEC no otorgan acceso al archivo de otra iglesia ni a su caja. Los líderes consultan su Secretaría; Presidencia/Vicepresidencia/Líder y Secretaría/Prosecretaría la gestionan. Tesorería se reserva a Presidencia/Vicepresidencia/Líder y Tesorería/Protesorería.
 
-El permiso se calcula a partir del usuario activo, sus cargos activos y permisos adicionales activos. Una asignación DEPEC habilita su alcance en todos los grupos. Cada formulario, descarga, exportación y operación de escritura comprueba acceso en el servidor. La edición no permite mover registros cambiando group_id. El traslado entre grupos necesita un flujo específico futuro.
+Una iglesia convocada consulta los datos de la convocatoria y su propia credencial; no recibe el acta DEPEC ni las credenciales de otras iglesias. DEPEC consulta únicamente las versiones de planes enviadas, no todos los archivos locales del remitente. Un administrador técnico conserva capacidades de soporte: no se debe usar ese rol para probar la privacidad de una directiva DEPEC.
 
-El administrador puede gestionar todas las organizaciones. Presidencia/vicepresidencia supervisa todo dentro de su alcance. Secretaría administra el padrón y documentos. Tesorería administra movimientos. Los vocales leen actividades por defecto; permisos adicionales permiten delegar publicaciones y otras secciones.
+La caja suma movimientos Aprobados. Pendientes y Anulados permanecen como detalle. Crear una deuda no afecta efectivo; pagar/cobrar inserta una liquidación y un movimiento aprobado de forma atómica. Anular ese movimiento conserva su historia y restaura el pendiente. Los pagos vinculados no se editan directamente.
 
-Los eventos públicos se muestran según visibilidad. Las publicaciones públicas exigen estado Publicado y fecha alcanzada. La galería pública exige Publicado. Los archivos públicos son imágenes de eventos/publicaciones/galería expresamente públicos; los documentos y comprobantes nunca usan esa ruta. Las imágenes verifican extensión y cabecera PNG/JPEG; los documentos se entregan como descarga. Para producción hace falta inspección más profunda de archivos y límites de almacenamiento.
+Los reportes distinguen resultado filtrado de saldo general de la organización. Las deudas pendientes al cierre consideran pagos hasta esa fecha; su filtro de proyecto es independiente de las categorías de gastos. El Excel contiene valores calculados y textos tratados como datos, no fórmulas ejecutables suministradas por usuarios.
 
-## Controles incluidos
+## Migración y archivos
 
-Contraseñas con hash de Werkzeug, CSRF, cookies HttpOnly/SameSite, sesiones de ocho horas, validación de formulario, SQL parametrizado, escapado HTML, nombres de archivo aleatorios, límite de carga de 10 MB, encabezados de protección, prevención de fórmulas en CSV y limitación de intentos por correo. Las respuestas autenticadas deshabilitan caché.
+`office_schema.sql` crea tablas e índices aditivamente. `upgrade-db` y el arranque actualizan el esquema sin borrar la base. Los movimientos anteriores se reutilizan; los documentos previos permanecen en un archivo identificado para evitar asociaciones inventadas.
 
-Las fechas se almacenan sin zona horaria en formato ISO; usa un servidor configurado en America/Lima. Un despliegue con usuarios de diferentes zonas requerirá normalizar fechas y definir la zona de cada evento. La interfaz funciona sin recursos de terceros.
+Cada adjunto nuevo se valida por extensión y contenido básico, recibe un nombre aleatorio y se sirve como descarga autorizada, fuera de `static/`. Se limita el envío a 10 MB y el contenido expandido de DOCX/XLSX. Una operación fallida revierte la base y elimina únicamente los archivos nuevos de esa operación. No hay análisis antivirus integrado.
 
-## Operación futura
+Las horas de eventos, reuniones y plazos se interpretan en America/Lima. Los plazos de recepción se comprueban en el servidor. Los permisos se vuelven a comprobar en formularios, exportaciones y descargas. La política CSP no permite handlers JavaScript inline.
 
-El servidor `run.py` es para desarrollo local. Para un servidor Python puede usarse Waitress, incluido en requirements: `python -m waitress --listen=127.0.0.1:8000 run:app`, detrás de un proxy con HTTPS. Configura COOKIE_SECURE=1 solo con HTTPS y gestiona SECRET_KEY fuera del repositorio. Esta instrucción no implica que el sistema esté desplegado ni endurecido para producción.
+## Límites operativos
 
-Necesita una estrategia de migraciones, copias programadas, prueba real de restauración, monitoreo, revisión de permisos, manejo de errores y auditoría de seguridad. Las copias deben proteger SQLite y adjuntos conjuntamente. No se incluye envío de correo, WhatsApp ni servicios externos.
+No hay firma digital, correo automático, conciliación ni cierre contable inmutable. Los estados Firmada/Registrada son datos declarados por la directiva. Antes de usar información real debe validarse el flujo institucional, la operación de respaldos y el despliegue con HTTPS. Para concurrencia significativa conviene evaluar PostgreSQL.

@@ -1,51 +1,42 @@
-# DEPEC — Comunidad y gestión
+# DEPEC · Comunidades, Secretaría y Tesorería
 
-Prototipo funcional v0.6.1 para la DEPEC y sus SEC/GJ. Construido con **Flask, Jinja, SQLite y JavaScript**, sin Node ni un frontend separado. Funciona localmente; no está desplegado en Internet. La interfaz y los datos iniciales están en español.
+Versión **7.0.0**, etiqueta prevista **v7.0.0**. Sistema web en español para DEPEC y sus SEC/GJ de Arequipa Sureste, construido con Flask, Jinja, SQLite y JavaScript. Se ejecuta localmente en un solo servidor.
+
+DEPEC reúne a las iglesias: no tiene local ni padrón propio. Sus integrantes son la suma de las iglesias; su directiva, archivo y caja sí pertenecen a DEPEC.
 
 ## Funciones del sistema
 
-- Páginas públicas de DEPEC y de cada SEC/GJ, con identidad y colores administrados por DEPEC.
-- Diseño juvenil retro, temas claro/oscuro y navegación adaptable a móviles.
-- Hero personalizable con últimos afiches y fotografías, mensajes y versículos diarios configurables.
-- Comunidades, directivas con insignias por cargo y perfiles públicos de miembros por iglesia.
-- Eventos con estados automáticos, local predeterminado por iglesia y enlaces a Google Maps. DEPEC no tiene local propio.
-- Collage de hasta seis eventos en cuatro columnas, orientación automática o manual, imágenes opcionales/genéricas y vista previa.
-- Rellenos decorativos adaptados a su orientación y destacados de eventos DEPEC en rojo.
-- Calendario de eventos con detalle lateral e historial de actividades finalizadas.
-- Formulario de eventos guiado, con vista previa a la derecha, ubicación unificada y selección de local por iglesia; listado filtrado por organización y acciones Ver tarjeta, Editar y Asistencia.
-- Tablón de anuncios con programación, prioridades y cuenta regresiva; se oculta cuando está vacío.
-- Álbumes con aportes de líderes, atribución de fotografías, tres álbumes recientes en portada y directorio con búsqueda y paginación.
-- Visor de imágenes al hacer clic, navegación y tamaño original, sin botones visibles sobre las fotos.
-- Mapas por iglesia y burbuja de contacto configurable con WhatsApp, teléfono, correo y horario.
-- Registro de miembros sujeto a aprobación y mensajes de comunidad moderados.
-- Calendario de cumpleaños independiente: padrón privado y publicación voluntaria de día/mes.
-- Gestión privada de miembros, bautismo, asistencia, cargos y permisos por organización.
-- Secretaría, credenciales, documentos, planes de trabajo, reuniones y tareas.
-- Tesorería con ingresos, egresos, comprobantes y reportes.
-- El panel no muestra el módulo incompleto de Publicaciones; se mantienen eventos, anuncios y mensajes aprobados.
-- Autenticación, permisos, protección CSRF, historial de acciones y copias de seguridad.
-- Cuenta global de pruebas con selector de iglesia y rol, incluidos Administrador, Miembro y Visitante.
+- Páginas DEPEC y por iglesia, colores personalizables, estilo juvenil, temas claro/oscuro, hero configurable y versículos diarios.
+- Comunidades, directivas por cargo, perfiles públicos moderados, contacto y preguntas frecuentes.
+- Calendario de eventos y cultos semanales con temáticas y cancelaciones por fecha; calendario de cumpleaños separado.
+- Eventos con destinatarios, invitaciones privadas, collage, imágenes opcionales, orientación ajustable y vista previa en la misma pantalla.
+- Anuncios con vencimiento, álbumes con buscador y visor de imágenes.
+- Padrón por iglesia vinculado a cuentas, foto opcional y avatares, descripción personal, cumpleaños, bautismo y actividad mediante switches privados.
+- Registro público de miembros sujeto a aprobación, registro por líderes y edición personal sin acceso al padrón de otros integrantes.
+- Vista general por cargo, resumen de integrantes e iglesias, caja propia y próximos eventos por organización.
+- Secretaría organizada por reunión: convocatorias ordinarias/extraordinarias, actas con asistentes, resumen, acuerdos, correspondencia, folio y archivo digital versionado.
+- Actas descargables en DOCX y modelos editables de acta, credencial, carta y plan anual.
+- Plan anual por organización y año; DEPEC abre/cierra recepción con fecha límite, recibe copias, observa y registra su recepción.
+- Credenciales de las iglesias convocadas: envío, copia conservada, revisiones y recepción por DEPEC. En estas reuniones se registra una sola acta, propiedad de DEPEC.
+- Correspondencia recibida y enviada, documentos, buscador y vinculación con la reunión donde se revisó.
+- Biblioteca común de plantillas publicadas por DEPEC, accesible a las directivas.
+- Tesorería por organización: ingresos/egresos, descripción, monto, fecha, efectivo/banco, comprobantes y movimientos pendientes/aprobados.
+- Proyectos ligados opcionalmente a eventos y categorías configurables, como música, logística o decoración.
+- Deudas por cobrar/pagar, pagos parciales, saldos y movimientos de caja vinculados; protección contra duplicados y sobrepagos.
+- Reportes por año, mes, rango de fechas, proyecto y categoría; saldo previo/al cierre y desgloses mensuales y por agrupación.
+- Excel real `.xlsx` con resumen, movimientos, meses, categorías, proyectos y deudas, preparado para imprimir.
+- Historial de acciones, archivos privados, CSRF, contraseñas con hash y copias de seguridad.
+- Cuenta global de pruebas para cambiar de rol e iglesia sin cerrar sesión.
 
-## Cuenta global de pruebas
+## Inicio en Windows
 
-En una base demo: `pruebas@depec.demo` / `DepecPruebas2026!`. El selector **PRUEBAS** cambia la iglesia y el rol sin cerrar sesión, aplicando sus permisos reales. Las operaciones guardadas modifican la base de pruebas. Consulta [CUENTA_DE_PRUEBAS.md](CUENTA_DE_PRUEBAS.md).
+1. Instala Python 3.11+ con el lanzador `py`.
+2. Extrae el proyecto y abre la carpeta `DEPEC_WebSite`.
+3. Ejecuta `iniciar.bat` y abre **http://127.0.0.1:5000**.
 
-## Documentación e historial
+El script instala dependencias en `.venv`, inicializa una base demo solo si no existe y conserva los datos anteriores. En esta entrega actualiza las dependencias para Excel y DOCX. La primera instalación requiere Internet.
 
-Este README resume las adiciones acumuladas, sin separar la documentación por versiones. Las guías generales están en `docs/`. Las notas de entregas y el README histórico se conservan en `docs_locales/`, excluido de Git.
-
-El historial real de commits se conserva en Git y puede consultarse con `git log --oneline`. No se incluyen hashes inventados de entregas que no fueron commits del repositorio.
-
-## Inicio rápido en Windows
-
-1. Instala Python 3.11 o superior, con el lanzador `py` disponible.
-2. Descomprime el proyecto y abre la carpeta `depec`.
-3. Ejecuta `iniciar.bat`. La primera vez necesita Internet para descargar dependencias.
-4. Abre **http://127.0.0.1:5000** en tu navegador.
-
-El script crea un entorno virtual, inicializa SQLite y carga datos ficticios solo cuando no existe una base. No borra datos anteriores.
-
-Alternativa manual en PowerShell, dentro de `depec` (no requiere activar el entorno ni cambiar ExecutionPolicy):
+Alternativa en PowerShell:
 
 ```powershell
 py -3 -m venv .venv
@@ -55,147 +46,95 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe run.py
 ```
 
-## Linux / macOS / WSL
+En Linux/macOS/WSL sustituye el ejecutable por `.venv/bin/python` después de crear el entorno con `python3 -m venv .venv`.
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m flask --app run init-db
-.venv/bin/python -m flask --app run seed-demo
-.venv/bin/python run.py
-```
+## Actualizar una instalación existente
 
-En Ubuntu puede ser necesario instalar previamente el paquete `python3-venv`.
+Detén el servidor y haz una copia con `backup.py`. Copia el código conservando `instance/`, `.venv/` y `.git/`. Ejecuta `iniciar.bat` o instala `requirements.txt` con el Python del entorno y reinicia. Recarga con Ctrl+F5.
 
-## Cuentas de demostración
+Las nuevas tablas se crean de forma aditiva, sin reiniciar SQLite. Los movimientos de caja existentes se usan directamente en los reportes. Los documentos, entregas, actividades y reuniones antiguos siguen en **Secretaría → Archivo de versiones anteriores**. No se inventan asociaciones entre actas y reuniones que antes no existían.
 
-Todas usan la contraseña **`DepecDemo2026!`**. Estos usuarios se crean exclusivamente al ejecutar `seed-demo`, que rechaza bases con usuarios existentes.
+## Recorrido de Secretaría
 
-| Correo | Acceso de ejemplo |
+1. Como directiva DEPEC, abre **Secretaría → Recepción de planes**, elige año, plazo e indicaciones y habilita la recepción.
+2. Cada iglesia guarda su plan en **Mi plan anual**, incluso si la recepción está cerrada. Cuando esté abierta, pulsa **Enviar última versión a DEPEC**.
+3. DEPEC registra **Recibido** u **Observado**, con su nota. La copia enviada queda fija: una revisión local posterior no la reemplaza hasta enviarla nuevamente.
+4. Desde **Reuniones y actas**, crea una reunión ordinaria o extraordinaria. DEPEC elige si convoca solo a su directiva o a iglesias determinadas. Las iglesias crean reuniones internas propias.
+5. Las iglesias convocadas encuentran la reunión en el resumen de Secretaría, suben su credencial e indican sus delegados. DEPEC la recepciona; ambos consultan el mismo documento conservado.
+6. La Secretaría de la organización convocante llena el acta, conserva su copia digitalizada y descarga el DOCX si lo necesita. **Registrada/Firmada** son etiquetas del archivo, no firmas digitales.
+7. Registra cartas recibidas/enviadas en **Correspondencia** y asócialas a una reunión para encontrarlas junto a su acta.
+8. Descarga modelos iniciales o publica los formatos de DEPEC en **Plantillas**. Los modelos incluidos son referencias editables, no documentos oficiales ya completados.
+
+## Recorrido de Tesorería
+
+1. En **Proyectos y categorías**, crea el campamento o actividad y sus categorías. No es obligatorio que exista un evento público.
+2. Registra un ingreso o egreso con su descripción e importe. Para incorporar dinero ya existente, registra un ingreso de categoría **Saldo inicial**.
+3. Filtra **Caja y reportes** por año/mes o por rango, proyecto y categoría. Solo los movimientos aprobados integran los totales.
+4. El **resultado del filtro** corresponde a esa selección. El **saldo de caja** corresponde a toda la organización hasta la fecha de cierre, aunque filtres por proyecto/categoría.
+5. En **Deudas**, registra lo que deben a la organización o lo que esta debe. Esto no cambia el efectivo. Cada pago/cobro parcial genera un único egreso/ingreso y reduce la deuda.
+6. Si también debes reflejar el dinero de un préstamo recibido o entregado originalmente, registra ese movimiento inicial por separado; crear la deuda no lo duplica.
+7. Anula un movimiento incorrecto para retirar su efecto y conservar el historial. Anular un pago restaura su saldo pendiente. Los pagos no se editan directamente.
+8. Descarga Excel para imprimir o continuar trabajando. Las deudas se calculan al cierre del periodo y se filtran por proyecto; la categoría pertenece a los movimientos.
+
+## Permisos y separación de archivos
+
+- Presidencia, Vicepresidencia y cargo genérico Líder gestionan Secretaría y Tesorería de su propia organización.
+- Secretaría/Prosecretaría gestionan planes, actas, credenciales, correspondencia y plantillas DEPEC si pertenecen a DEPEC.
+- Los demás líderes consultan la Secretaría de su organización; los formularios de edición quedan reservados a los cargos anteriores.
+- Tesorería/Protesorería gestionan caja y deudas de su organización. Secretaría y Vocales no acceden al detalle de tesorería por su cargo.
+- Una asignación DEPEC no concede acceso al archivo interno ni a la caja de otra iglesia. Solo recibe las copias de planes y credenciales que esta entrega.
+- La supervisión DEPEC sobre eventos, padrón y páginas conserva el alcance general del sistema. Los miembros no acceden a estas oficinas privadas.
+- El administrador técnico global mantiene capacidades de soporte; es distinto del cargo Presidente DEPEC. Para comprobar los permisos reales, selecciona ese cargo en la cuenta de pruebas.
+- Los cargos se activan/finalizan desde Organización. El periodo es una etiqueta y no vence automáticamente.
+
+## Cuentas demo
+
+Contraseña: **`DepecDemo2026!`**.
+
+| Correo | Cargo |
 |---|---|
-| admin@depec.demo | Administración completa, cuentas, grupos, cargos y permisos adicionales |
-| presidencia@depec.demo | Presidencia DEPEC: información consolidada y gestión de todos los grupos |
-| israel@depec.demo | Presidencia de SEC Israel, únicamente ese grupo |
-| secretaria@depec.demo | Secretaría de SEC Israel; padrón, documentos, eventos y anuncios |
-| tesoreria@depec.demo | Tesorería de SEC Israel; movimientos financieros y lectura de actividades |
-| vocal@depec.demo | Lectura de actividades de SEC Israel; sin padrón, documentos ni tesorería |
+| admin@depec.demo | Administrador técnico global |
+| presidencia@depec.demo | Presidencia DEPEC |
+| israel@depec.demo | Presidencia SEC Israel |
+| secretaria@depec.demo | Secretaría SEC Israel |
+| tesoreria@depec.demo | Tesorería SEC Israel |
+| vocal@depec.demo | Vocal SEC Israel |
 
-Los integrantes, montos y actividades son ficticios. Las descripciones y horarios no son información oficial de las iglesias. Los cumpleaños de ejemplo pertenecen al mes en que cargas la demo.
+Cuenta global de pruebas: **`pruebas@depec.demo` / `DepecPruebas2026!`**. Cambia cargo e iglesia en el selector PRUEBAS. Sus cambios afectan la base de pruebas; las operaciones no se simulan. Más detalles en [CUENTA_DE_PRUEBAS.md](CUENTA_DE_PRUEBAS.md).
 
-## Qué puedes probar
+## Guardar y etiquetar el hito en Git
 
-- **Página pública:** directorio de los seis grupos, página por grupo, calendario público, noticias, afiches y galería.
-- **Panel privado:** totales de integrantes, bautizados/no bautizados, activos/no activos, líderes y directiva; recuento por iglesia y próximo evento por organización. DEPEC agrega los integrantes de sus iglesias y muestra únicamente su caja propia.
-- **Calendario:** vista mensual, navegación entre meses, filtros y colores por organización; eventos de varios días y detalles desplegables.
-- **Eventos:** crear, consultar, editar y eliminar, con organización predeterminada según el cargo, ayudas en los campos, invitaciones compactas y vista previa lateral completa sin desplazamiento interno. Los filtros se reúnen en una barra; finalizados ocultos por defecto y opción para incluirlos atenuados. Estado Programado o Por programar, ubicación manual o local de iglesia, imagen opcional y orientación automática/vertical/horizontal mediante selector segmentado.
-- **Miembros:** padrón privado vinculado a cuentas, correo, foto opcional, descripción, contacto, apoderado, fechas y switches de bautismo y actividad en el formulario y el listado. Registro público con aprobación o registro por líderes; edición personal en Mi datos, contraseñas protegidas y eliminación por líderes.
-- **Cumpleaños:** listado privado mensual. El indicador de compartir se registra, pero no publica cumpleaños en la web.
-- **Secretaría:** actas, credenciales, planes, informes, archivos privados y estados documentales.
-- **Entregas:** solicitudes documentales por grupo, fecha límite, archivo de respuesta y observaciones.
-- **Tesorería:** ingresos/egresos en PEN, efectivo/banco, categorías, comprobantes, relación con evento, aprobación y saldo acumulado de movimientos aprobados.
-- **Plan de trabajo:** actividades, objetivos, responsable, presupuesto, periodo y avance.
-- **Reuniones y tareas:** agenda, acuerdos escritos, responsables, vencimiento y estados.
-- **Asistencia e inscripciones internas:** registro por miembro del grupo anfitrión; sin límite de cupos. No hay registro público de visitantes.
-- **Organización:** crear/editar grupos, crear/desactivar usuarios, asignar cargos por periodo y finalizar cargos conservando el historial. Admite varios vocales y varios cargos por persona.
-- **Permisos adicionales:** administrador concede lectura o edición de un módulo, por grupo; por ejemplo, permitir anuncios a un vocal. Son aditivos a los permisos del cargo.
-- **Reportes:** cifras acumuladas por organización, CSV para Excel e impresión/guardar PDF desde el navegador.
-- **Cuenta:** cambio de contraseña y cierre de sesión.
-- **Historial:** creación, cambios, eliminaciones y administración registrados con usuario y fecha.
+Después de copiar el código dentro de tu repositorio existente:
 
-## Recorrido sugerido
-
-1. Visita el inicio y entra a SEC Israel. Abre el calendario general y filtra por grupo.
-2. Ingresa como administrador. Revisa el panel y crea un evento para Israel.
-3. Registra una publicación y cambia entre borrador, interna y pública.
-4. Revisa el padrón y el listado de cumpleaños.
-5. Adjunta un PDF de prueba en Secretaría y descárgalo desde el panel.
-6. Registra un ingreso pendiente: no suma al saldo. Cámbialo a aprobado y comprueba el reporte.
-7. Abre Asistencia desde un evento e inscribe a un miembro.
-8. Cierra sesión e ingresa como tesorería: no podrá acceder al padrón de Israel ni gestionar otros grupos.
-9. Como administrador, concede edición de anuncios a un vocal y prueba esa cuenta.
-
-## Estructura
-
-```text
-depec/
-  run.py                    Entrada de la aplicación
-  iniciar.bat               Arranque de demostración para Windows
-  requirements.txt          Dependencias de ejecución
-  requirements-dev.txt      Dependencias de pruebas
-  backup.py                 Copia consistente de SQLite y archivos
-  app/
-    __init__.py             Rutas, acceso, validación y operaciones
-    modules.py              Definición de formularios por módulo
-    schema.sql              Esquema SQLite
-    seed.py                 Datos ficticios
-    templates/              Páginas Jinja
-    static/                 CSS y JavaScript locales
-  tests/test_system.py      Pruebas funcionales y de permisos
-  docs/                     Arquitectura, alcance y evolución
+```powershell
+git add .
+git commit -m "feat: secretaria y tesoreria digital"
+.\.venv\Scripts\python.exe etiquetar_version.py
+git push
+git push origin v7.0.0
 ```
 
-Al ejecutar se genera `instance/`, con SQLite, clave de sesión y archivos. No compartas esa carpeta cuando contenga información real. El ZIP entregado excluye datos de ejecución, claves, entornos virtuales y cachés.
+El script lee `VERSION`, exige un commit sin cambios pendientes y crea una etiqueta anotada `v7.0.0`. No sobrescribe una etiqueta existente en otro commit. Puedes usar `etiquetar_version.py --push` para publicar también la etiqueta en `origin`. El ZIP no contiene tu carpeta `.git`: copiar archivos no crea por sí solo un commit ni una etiqueta.
 
-## Permisos predeterminados
+Las notas de entregas anteriores están en `docs_locales/`, ignorado por Git. Este README reúne las funciones actuales, sin añadir una sección por cada entrega. El historial real está en `git log --oneline`.
 
-| Cargo | Actividades, planes, tareas, galería | Padrón / Secretaría / Entregas | Tesorería |
-|---|---|---|---|
-| Presidente / Vicepresidente | Leer y gestionar | Leer y gestionar | Leer y gestionar |
-| Secretario / Prosecretario | Leer y gestionar | Leer y gestionar | Sin acceso |
-| Tesorero / Protesorero | Leer | Sin acceso | Leer y gestionar |
-| Vocal | Leer | Sin acceso | Sin acceso |
-
-Un cargo DEPEC se aplica a todas las organizaciones. Un cargo SEC/GJ se limita a su grupo. El administrador gestiona cuentas y permisos. Finalizar un cargo no revoca los permisos adicionales que hayan sido concedidos: estos se revocan por separado desde Organización.
-
-Esta matriz es una propuesta inicial, no un reglamento oficial. Los periodos se conservan como etiquetas; el administrador debe finalizar los cargos, porque no vencen automáticamente por fecha.
-
-## Pruebas
+## Pruebas y copia de seguridad
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-En Linux usa `.venv/bin/python`. Las pruebas crean bases temporales independientes. Cubren páginas, autenticación, CSRF, aislamiento, roles, CRUD, documentos, calendario, asistencia, CSV y cambios de cuenta. No equivalen a una auditoría de seguridad ni a validación visual en todos los dispositivos.
+Las pruebas usan bases temporales y cubren permisos, CSRF, separación de organizaciones, recepción de copias, documentos inválidos, cuentas, pagos, duplicados, importes y Excel. No sustituyen las pruebas visuales con las directivas en sus equipos.
 
-## Copias de seguridad
+Con el servidor detenido, ejecuta `python backup.py` usando el Python del entorno. Guarda el ZIP privado de `backups/`. Para restaurarlo, detén el servidor y recupera su contenido en `instance/` de una instalación compatible.
 
-Con la aplicación detenida para mantener también los adjuntos consistentes:
+## Instalación sin datos de demostración
 
-```powershell
-.\.venv\Scripts\python.exe backup.py
-```
+Ejecuta `init-db` y `create-admin`, sin ejecutar `seed-demo`. Crea las SEC/GJ, cuentas y cargos desde Organización. La instalación incluye únicamente DEPEC antes de configurarla.
 
-Se genera un ZIP en `backups/`. Para restaurar, detén la aplicación y extrae el contenido en `instance/` de una instalación compatible. Conserva estas copias en un lugar privado. El esquema de esta versión se crea con `init-db`; cambios futuros necesitarán migraciones explícitas.
+## Arquitectura y estado
 
-## Arranque sin datos demo
+`app/secretariat.py` implementa la oficina documental; `app/treasury.py` y `treasury_export.py`, caja y Excel. `office_common.py` centraliza permisos y documentos, y `office_schema.sql` incorpora las tablas nuevas. Los adjuntos se guardan fuera de `static/`, con versiones conservadas y descargas autorizadas. Los importes se calculan con Decimal/céntimos, sin sumar floats en el servidor.
 
-En una instalación nueva:
-
-```powershell
-.\.venv\Scripts\python.exe -m flask --app run init-db
-.\.venv\Scripts\python.exe -m flask --app run create-admin
-```
-
-No ejecutes `seed-demo` ni el arranque automático de demo en esa instalación. Crea SEC/GJ y usuarios desde Organización. Este modo crea únicamente DEPEC; no carga cuentas ni actividades ficticias. Define `SECRET_KEY` como secreto de entorno si deseas reemplazar la clave local autogenerada.
-
-## Cultos juveniles y calendario
-
-Desde Calendario, abre «Cultos juveniles» para configurar día y hora semanal. Pulsa «Tema / cancelar» en una fecha para añadir una temática o cancelar ese culto con un motivo. Restablecer recupera el horario habitual. Estos cultos se muestran públicamente y no crean eventos. Jorge Chávez incluye como ejemplo los domingos a las 15:30. DEPEC no tiene culto ni local propios.
-
-Las acciones de registros son compactas y «Ver» abre la tarjeta sobre la misma pantalla. Se incorporó el logo IEP como icono de la pestaña.
-
-## Destinatarios de eventos
-
-- **Toda la DEPEC:** visible públicamente en las páginas y calendarios de la DEPEC y sus iglesias.
-- **Público de mi iglesia:** visible públicamente en la página de la iglesia organizadora. No exige iniciar sesión.
-- **Iglesias invitadas:** requiere iniciar sesión; acceden líderes y miembros aprobados de las iglesias seleccionadas, además de la organización anfitriona y la directiva DEPEC.
-- **Solo líderes de mi organización:** acceso reservado a su directiva y a la supervisión DEPEC.
-
-Cada iglesia registra eventos únicamente a su nombre. Su panel muestra información de su iglesia y eventos accesibles de DEPEC; la directiva DEPEC mantiene la administración general. Los controles de imagen y formato están sobre la vista previa; la ayuda aparece al pasar el cursor por los títulos de los campos.
-
-## Estado y límites
-
-Es una **base ejecutable de prototipo**, no una versión final certificada para datos personales o financieros reales. La matriz completa de funciones implementadas, parciales y pendientes está en `docs/ALCANCE.md`. Falta validar los flujos con las directivas y preparar despliegue, recuperación de cuentas, pruebas visuales y controles operativos.
-
-Se eligió Flask para probar otro framework sin añadir la complejidad de dos servidores. Jinja renderiza las páginas; los formularios usan POST con CSRF y JavaScript mejora navegación, confirmaciones e impresión. No depende de CDN, React, HTMX ni herramientas de compilación.
+El proyecto sigue siendo una base de prototipo: faltan validación institucional, despliegue, recuperación de cuentas, conciliación bancaria y cierres contables inmutables. El archivo de actas no reemplaza por sí solo firmas físicas ni incorpora firma digital. Más detalles en [docs/ALCANCE.md](docs/ALCANCE.md) y [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).

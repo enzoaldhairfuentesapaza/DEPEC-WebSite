@@ -79,6 +79,7 @@ def create_app(test_config=None):
         if g.user['admin']:
             return True
         owned={row['group_id'] for row in db().execute('SELECT group_id FROM assignments WHERE user_id=? AND active=1',(g.user['id'],))}
+        if module in {'documents','plans','meetings','requests','finance'} and group_id not in owned:return False
         if 1 not in owned and group_id not in owned:
             if not write and group_id==1 and module=='events' and owned:return True
             return False
@@ -320,6 +321,9 @@ def create_app(test_config=None):
     def listing(module):
         if module not in MODULES: abort(404)
         scope=request.args.get('group',type=int) or default_event_group()
+        if module=='finance':
+            if not allowed(scope,'finance'):abort(403)
+            return treasury['index']()
         if module=='members':return member_registry['listing'](scope)
         if module=='events' and 'group' not in request.args:scope=default_event_group()
         if scope and not allowed(scope,module):abort(403)
@@ -409,6 +413,7 @@ def create_app(test_config=None):
     @logged
     def edit(module,record_id=None):
         if module not in MODULES: abort(404)
+        if module=='finance':return treasury['movement'](record_id)
         if module=='members':return member_registry['editor'](record_id)
         item=get_record(record_id) if record_id else None
         if item and item['module']!=module: abort(404)
@@ -461,6 +466,7 @@ def create_app(test_config=None):
     def delete(record_id):
         item=get_record(record_id)
         if not allowed(item['group_id'],item['module'],True): abort(403)
+        if item['module']=='finance':return treasury['void'](record_id)
         if item['module']=='members':member_registry['detach'](record_id)
         db().execute('DELETE FROM media_files WHERE record_id=?',(record_id,))
         db().execute('DELETE FROM records WHERE id=?',(record_id,))
@@ -603,7 +609,8 @@ def create_app(test_config=None):
     @logged
     def audit_view():
         rows=db().execute('SELECT a.*,u.name person,gr.name organization FROM audit a LEFT JOIN users u ON a.user_id=u.id LEFT JOIN groups gr ON a.group_id=gr.id ORDER BY a.id DESC LIMIT 500').fetchall()
-        rows=[r for r in rows if g.user['admin'] or (r['group_id'] and {'Presidente','Vicepresidente'} & roles_for(r['group_id']))]
+        own_audit={r['group_id'] for r in db().execute("SELECT group_id FROM assignments WHERE user_id=? AND active=1 AND role IN ('Presidente','Vicepresidente')",(g.user['id'],))}
+        rows=[r for r in rows if g.user['admin'] or r['group_id'] in own_audit]
         return render_template('audit.html',items=rows)
 
     @app.errorhandler(400)
@@ -659,5 +666,15 @@ def create_app(test_config=None):
     from .member_registry import register_members
     member_registry=register_members(app,db,allowed,logged,records,get_record,now,audit)
     app.extensions['member_registry']=member_registry
+    from .office_common import Office,SCHEMA
+    from .secretariat import register_secretariat
+    from .treasury import register_treasury
+    office=Office(app,dict(db=db,logged=logged,now=now,audit=audit))
+    @app.before_request
+    def office_schema():
+        if not db().execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='office_meetings'").fetchone():db().executescript(SCHEMA.read_text(encoding='utf-8'))
+    register_secretariat(app,office)
+    treasury=register_treasury(app,office)
+    app.extensions['office']=office
     community=register_community(app,dict(db=db,allowed=allowed,logged=logged,audit=audit,now=now,roles_for=roles_for,get_record=get_record,event_access=event_access))
     return app

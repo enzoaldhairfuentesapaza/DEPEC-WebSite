@@ -56,6 +56,7 @@ def repair_media_encoding(connection):
 def upgrade_schema(connection):
     if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='groups'").fetchone():
         return
+    connection.executescript((Path(__file__).parent/'office_schema.sql').read_text(encoding='utf-8'))
     repair_media_encoding(connection)
     if connection.execute('PRAGMA user_version').fetchone()[0]<3:
         connection.execute("UPDATE groups SET color='#bd123b' WHERE id=1 AND color='#d46a3b'")
